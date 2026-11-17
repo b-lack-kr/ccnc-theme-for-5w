@@ -28,15 +28,17 @@ public final class EdgeHandle extends ModEntry {
  private View first,second;
  private float firstAlpha,secondAlpha;
  private Handle handle;
+ private View scrollGuide; private float guideAlpha;
+ private EdgeHandlePager pager;
  private int originalX;
  private final Runnable scan=new Runnable(){public void run(){
   if(mod==null||!mod.enabled()){remove();return;}
-  try{FrameLayout current=find(); if(current!=root){remove();if(current!=null)install(current);}position();}catch(Exception ignored){}
+  try{FrameLayout current=find(); if(current!=root){remove();if(current!=null)install(current);}position();hideGuide();}catch(Exception ignored){}
   ui.postDelayed(this,250);
  }};
  @Override public void appLoaded(ModContext m,LoadedApp app){
   if(app==null||!"com.mobis.splitscreen.right".equals(app.packageName))return;
-  mod=m;ui.removeCallbacks(scan);ui.post(scan);
+  mod=m;if(pager==null){pager=new EdgeHandlePager(m);pager.install(app);}ui.removeCallbacks(scan);ui.post(scan);
  }
  @Override public void onEnabled(ModContext m,boolean enabled){
   if(mod==null)return;ui.removeCallbacks(scan);if(enabled)ui.post(scan);else ui.post(new Runnable(){public void run(){remove();}});
@@ -53,6 +55,12 @@ public final class EdgeHandle extends ModEntry {
   }return null;
  }
  private static FrameLayout find() throws Exception {View v=findWindow("SS_Button_Window");return v instanceof FrameLayout?(FrameLayout)v:null;}
+ private void hideGuide() throws Exception {
+  View panel=findWindow("com.mobis.splitscreen.right");View candidate=null;
+  if(panel!=null){int id=panel.getResources().getIdentifier("scrollBtnLayer","id","com.mobis.splitscreen.right");if(id!=0)candidate=panel.findViewById(id);}
+  if(candidate!=scrollGuide){if(scrollGuide!=null)scrollGuide.setAlpha(guideAlpha);scrollGuide=candidate;if(candidate!=null)guideAlpha=candidate.getAlpha();}
+  if(scrollGuide!=null&&scrollGuide.getAlpha()!=0f)scrollGuide.setAlpha(0f);
+ }
  private void install(FrameLayout v){
   if(v.getChildCount()!=2||v.getWidth()!=80||v.getHeight()!=192||!(v.getChildAt(0) instanceof android.widget.ImageButton)||!(v.getChildAt(1) instanceof android.widget.ImageButton))return;
   root=v;first=v.getChildAt(0);second=v.getChildAt(1);firstAlpha=first.getAlpha();secondAlpha=second.getAlpha();
@@ -76,6 +84,7 @@ public final class EdgeHandle extends ModEntry {
   handle.setVisibility(View.VISIBLE);
  }
  private void remove(){
+  if(scrollGuide!=null){scrollGuide.setAlpha(guideAlpha);scrollGuide=null;}
   if(root!=null){try{WindowManager.LayoutParams p=(WindowManager.LayoutParams)root.getLayoutParams();p.x=originalX;((WindowManager)root.getContext().getSystemService(Context.WINDOW_SERVICE)).updateViewLayout(root,p);}catch(RuntimeException ignored){}}
   if(root!=null&&handle!=null)root.removeView(handle);
   if(first!=null)first.setAlpha(firstAlpha);if(second!=null)second.setAlpha(secondAlpha);

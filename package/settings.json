@@ -2,6 +2,14 @@
   "version": 1,
   "settings": [
     {
+      "key": "navi_swap_enabled",
+      "type": "toggle",
+      "default": false,
+      "title": "NAV 버튼 반전 및 음성 검색 (시험용)",
+      "description": "차량에서 입력 반전과 음성 검색을 검증한 뒤에만 켜세요.",
+      "apply": "live"
+    },
+    {
       "key": "bt_osd_mode",
       "type": "choice",
       "default": "move",
@@ -23,7 +31,7 @@
       "type": "toggle",
       "default": true,
       "title": "재생 진행선 표시",
-      "description": "나우플레잉 표시줄 아래에 재생 진행선을 표시합니다.",
+      "description": "곡명과 가수명 영역 위에 재생 진행선을 표시합니다.",
       "apply": "live"
     }
   ]

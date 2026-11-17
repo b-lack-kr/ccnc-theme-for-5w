@@ -32,6 +32,7 @@ final class AppSlot extends android.widget.FrameLayout {
  private static final String PREFS="blackr_ccnc_theme", MODE="slot_mode", FAVORITE="favorite_package", POSITION="slot_position";
  private final SharedPreferences prefs;
  private final ImageView icon;
+ private final Paint borderPaint=new Paint(3);
  private Runnable mediaAction;
  private Runnable placementChanged;
  private Boolean playing;
@@ -45,7 +46,8 @@ final class AppSlot extends android.widget.FrameLayout {
   public void draw(Canvas c){android.graphics.Rect b=getBounds();float s=Math.min(b.width(),b.height()),r=s*.075f,cx=b.exactCenterX(),cy=b.exactCenterY();paint.setColor(isLight()?0xff394247:0xffe5eaed);for(int y=-1;y<=1;y++)for(int x=-1;x<=1;x++)c.drawCircle(cx+x*s*.23f,cy+y*s*.23f,r,paint);}
   public void setAlpha(int alpha){} public void setColorFilter(android.graphics.ColorFilter f){} public int getOpacity(){return android.graphics.PixelFormat.TRANSLUCENT;}
  };
- AppSlot(Context context){super(context);prefs=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE);icon=new ImageView(context);icon.setScaleType(ImageView.ScaleType.FIT_CENTER);LayoutParams p=new LayoutParams(52,52,Gravity.CENTER);addView(icon,p);setOnClickListener(new OnClickListener(){public void onClick(View v){if("apps".equals(mode()))showApps(false);else if("favorite".equals(mode()))launch(prefs.getString(FAVORITE,""));else if("control".equals(mode())&&mediaAction!=null)mediaAction.run();}});refresh();}
+ AppSlot(Context context){super(context);setWillNotDraw(false);prefs=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE);icon=new ImageView(context);icon.setScaleType(ImageView.ScaleType.FIT_CENTER);LayoutParams p=new LayoutParams(52,52,Gravity.CENTER);addView(icon,p);setOnClickListener(new OnClickListener(){public void onClick(View v){if("apps".equals(mode()))showApps(false);else if("favorite".equals(mode()))launch(prefs.getString(FAVORITE,""));else if("control".equals(mode())&&mediaAction!=null)mediaAction.run();}});refresh();}
+ @Override protected void onDraw(Canvas canvas){super.onDraw(canvas);if(getWidth()<2||getHeight()<2)return;borderPaint.setStyle(Paint.Style.STROKE);borderPaint.setStrokeWidth(1f);borderPaint.setColor(isLight()?0xffa0a9ad:0xffc1c9cc);canvas.drawRect(.5f,.5f,getWidth()-.5f,getHeight()-.5f,borderPaint);}
  private boolean isLight(){return (getResources().getConfiguration().uiMode & android.content.res.Configuration.UI_MODE_NIGHT_MASK)!=android.content.res.Configuration.UI_MODE_NIGHT_YES;}
  private String mode(){String m=prefs.getString(MODE,"none");return "apps".equals(m)||"favorite".equals(m)||"control".equals(m)?m:"none";}
  void setMediaAction(Runnable action){mediaAction=action;}

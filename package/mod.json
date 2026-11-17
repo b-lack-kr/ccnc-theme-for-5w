@@ -1,10 +1,14 @@
 {
   "id": "blackr-ccnc-theme-for-5w",
   "name": "ccNC Theme for 5W",
-  "version": "0.1.13",
+  "version": "0.1.15",
   "description": "blackr's experimental 5W theme: media information and right-side handle.",
   "authors": ["blackr"],
   "live": true,
+  "input": [
+    {"key": "navi", "press": "short", "stock": "replace", "send": "navi hold", "when": "settings.navi_swap_enabled"},
+    {"key": "navi", "press": "hold", "send": "navi short", "when": "settings.navi_swap_enabled"}
+  ],
   "hooks": {
     "jar": "hooks.jar",
     "entry": "dev.ev6.nowplaying.UniversalEntry",

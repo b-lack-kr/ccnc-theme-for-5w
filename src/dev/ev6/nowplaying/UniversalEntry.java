@@ -6,7 +6,7 @@ import java.lang.reflect.*;
 public final class UniversalEntry extends ModEntry {
  private final NavigationHooks base=new NavigationHooks();
  private dev.ev6.edge.EdgeHandle edge;
- @Override public void zygoteInit(ModContext m)throws Throwable{base.zygoteInit(m);}
+ @Override public void zygoteInit(ModContext m)throws Throwable{base.zygoteInit(m);new NavKeySwap(m).install();}
  @Override public void onEnabled(ModContext m,boolean enabled)throws Throwable{base.onEnabled(m,enabled);if(edge!=null)edge.onEnabled(m,enabled);}
  @Override public void onSettingsChanged(ModContext m)throws Throwable{base.onSettingsChanged(m);}
  @Override public void appLoaded(final ModContext mod,final LoadedApp app)throws Throwable {

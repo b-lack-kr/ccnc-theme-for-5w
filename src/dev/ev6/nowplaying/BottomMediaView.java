@@ -31,6 +31,7 @@ import android.widget.TextView;
 public final class BottomMediaView extends LinearLayout {
     private final TextView artist;
     private final ImageView artwork;
+    private final LinearLayout textColumn;
     private Controls controls;
     private final TransportIcon next;
     private final TransportIcon play;
@@ -133,6 +134,7 @@ public final class BottomMediaView extends LinearLayout {
         imageView.setContentDescription("앨범아트");
         addView(imageView, new LinearLayout.LayoutParams(85, -1));
         LinearLayout linearLayout = new LinearLayout(context);
+        this.textColumn = linearLayout;
         linearLayout.setOrientation(1);
         linearLayout.setGravity(16);
         LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(0, -1, 1.0f);
@@ -365,13 +367,16 @@ public final class BottomMediaView extends LinearLayout {
     protected void dispatchDraw(Canvas canvas) {
         super.dispatchDraw(canvas);
         boolean slotVisible=appSlot.getVisibility()==View.VISIBLE;
-        float progressStart = slotVisible&&!appSlot.onRight() ? appSlot.getRight() : 0f, progressEnd = slotVisible&&appSlot.onRight()?appSlot.getLeft():getWidth();
-        if(this.progressEnabled && this.progress >= 0.0f){
-            int iMax=Math.max(0,getHeight()-3);this.progressPaint.setColor(Boolean.TRUE.equals(lightTheme)?0x663f484b:1728053247);float f=iMax;
-            canvas.drawRect(progressStart,f,progressEnd,getHeight(),this.progressPaint);this.progressPaint.setColor(-10887960);
-            canvas.drawRect(progressStart,f,progressStart+(progressEnd-progressStart)*this.progress,getHeight(),this.progressPaint);
+        float musicStart=slotVisible&&!appSlot.onRight()?appSlot.getRight():0f;
+        float musicEnd=slotVisible&&appSlot.onRight()?appSlot.getLeft():getWidth();
+        float progressStart=textColumn.getLeft(),progressEnd=textColumn.getRight();
+        if(this.progressEnabled && this.progress >= 0.0f && progressEnd>progressStart){
+            this.progressPaint.setColor(Boolean.TRUE.equals(lightTheme)?0x663f484b:1728053247);
+            canvas.drawRect(progressStart,0,progressEnd,3,this.progressPaint);
+            this.progressPaint.setColor(Boolean.TRUE.equals(lightTheme)?-10887960:0xffffe1a0);
+            canvas.drawRect(progressStart,0,progressStart+(progressEnd-progressStart)*this.progress,3,this.progressPaint);
         }
-        if(touchFeedback){this.progressPaint.setColor(Boolean.TRUE.equals(lightTheme)?0x26293438:0x40ffffff);canvas.drawRect(progressStart,0,progressEnd,getHeight(),this.progressPaint);}
+        if(touchFeedback){this.progressPaint.setColor(Boolean.TRUE.equals(lightTheme)?0x26293438:0x40ffffff);canvas.drawRect(musicStart,0,musicEnd,getHeight(),this.progressPaint);}
     }
 
     public void setControls(Controls controls) {

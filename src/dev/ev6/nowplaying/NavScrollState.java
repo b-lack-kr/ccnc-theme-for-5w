@@ -20,6 +20,10 @@ public final class NavScrollState {
     }
 
     private static final Pattern SCENE = Pattern.compile("^(\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d\\.\\d+)\\s+(\\d+)\\s+\\d+\\s+[VDIWEF]\\s+ExSL\\s*:.*top scene updated: screen\\(1\\),.*curScene\\(([^)]+)\\).*$");
+    static String sceneName(String line, int pid, long earliest, long now) {
+        if(line==null)return null;Matcher m=SCENE.matcher(line);if(!m.matches()||!Integer.toString(pid).equals(m.group(2)))return null;
+        try{SimpleDateFormat year=new SimpleDateFormat("yyyy",Locale.US);SimpleDateFormat date=new SimpleDateFormat("yyyy MM-dd HH:mm:ss.SSS",Locale.US);date.setLenient(false);long t=date.parse(year.format(new Date(now))+" "+m.group(1)).getTime();return t>=earliest&&t<=now+1000?m.group(3):null;}catch(RuntimeException e){return null;}catch(ParseException e){return null;}
+    }
     public static Boolean sceneBlocked(String line, int pid, long earliest, long now) {
         if (line == null) return null;
         Matcher m=SCENE.matcher(line); if(!m.matches() || !Integer.toString(pid).equals(m.group(2))) return null;

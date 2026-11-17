@@ -11,6 +11,10 @@ public final class StateTest {
   if(!Boolean.TRUE.equals(NavScrollState.sceneBlocked(scene,2133,now-1000,now)))throw new AssertionError("overview hidden");
   if(!Boolean.FALSE.equals(NavScrollState.sceneBlocked(scene.replace("curScene(Map_Overview)","curScene(Map_Normal)"),2133,now-1000,now)))throw new AssertionError("normal visible");
   if(NavScrollState.sceneBlocked(scene,9999,now-1000,now)!=null)throw new AssertionError("scene wrong pid");
+  String search=scene.replace("curScene(Map_Overview)","curScene(Search_Places)");
+  if(!"Search_Places".equals(NavScrollState.sceneName(search,2133,now-1000,now)))throw new AssertionError("search scene");
+  if(NavScrollState.sceneName(search,9999,now-1000,now)!=null)throw new AssertionError("search wrong pid");
+  if(NavScrollState.sceneName(search,2133,now+1000,now)!=null)throw new AssertionError("stale search");
   GuidanceProxy.set(null);if(GuidanceProxy.expanded()!=null)throw new AssertionError("unknown");System.out.println("PASS: observed open, closed, wrong process and unknown state");
  }
 }
