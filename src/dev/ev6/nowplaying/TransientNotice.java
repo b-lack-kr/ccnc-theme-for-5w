@@ -61,7 +61,7 @@ final class TransientNotice {
    panel=new LinearLayout(activity);panel.setOrientation(LinearLayout.HORIZONTAL);panel.setGravity(Gravity.CENTER_VERTICAL);panel.setBackgroundColor(light?0xffe4e6e8:0xff333537);
    artwork=new ImageView(activity);artwork.setScaleType(ImageView.ScaleType.CENTER_CROP);artwork.setBackgroundColor(light?0xffccd0d3:0xff3b404b);panel.addView(artwork,new LinearLayout.LayoutParams(85,-1));artworkChanged();
    LinearLayout details=new LinearLayout(activity);details.setOrientation(LinearLayout.VERTICAL);details.setGravity(Gravity.CENTER_VERTICAL);details.setPadding(9,0,9,0);panel.addView(details,new LinearLayout.LayoutParams(0,-1,1));
-   title=text(activity,19,true,light?0xff30383b:0xffffffff);artist=text(activity,16,false,light?0xff5c6568:0xffe2e7ec);
+   title=text(activity,19,false,light?0xff30383b:0xffffffff);artist=text(activity,16,false,light?0xff5c6568:0xffe2e7ec);
    title.setText(pendingTitle);artist.setText(pendingArtist==null?"":pendingArtist);details.addView(title,new LinearLayout.LayoutParams(-1,-2));details.addView(artist,new LinearLayout.LayoutParams(-1,-2));
    root.addView(panel,new FrameLayout.LayoutParams(-1,-1));
    WindowManager.LayoutParams p=new WindowManager.LayoutParams(515,85,WindowManager.LayoutParams.TYPE_SYSTEM_ALERT,WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL|WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,PixelFormat.TRANSLUCENT);

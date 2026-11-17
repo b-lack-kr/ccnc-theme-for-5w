@@ -1,7 +1,7 @@
 {
   "id": "blackr-ccnc-theme-for-5w",
   "name": "ccNC Theme for 5W",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "description": "blackr's experimental 5W theme: media information and right-side handle.",
   "authors": ["blackr"],
   "live": true,

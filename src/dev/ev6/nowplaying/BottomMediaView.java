@@ -141,9 +141,9 @@ public final class BottomMediaView extends LinearLayout {
         addView(linearLayout, layoutParams);
         appSlot.setPlacementChanged(new Runnable(){public void run(){placeAppSlot();}});
         placeAppSlot();
-        TextView textViewText = text(19, -1, 1);
+        TextView textViewText = text(19, -1, Typeface.NORMAL);
         this.title = textViewText;
-        TextView textViewText2 = text(16, -1906708, 1);
+        TextView textViewText2 = text(16, -1906708, Typeface.NORMAL);
         this.artist = textViewText2;
         linearLayout.addView(textViewText, new LinearLayout.LayoutParams(-1, -2));
         linearLayout.addView(textViewText2, new LinearLayout.LayoutParams(-1, -2));
