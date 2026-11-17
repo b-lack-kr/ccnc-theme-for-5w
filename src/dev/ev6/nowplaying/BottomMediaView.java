@@ -47,7 +47,7 @@ public final class BottomMediaView extends LinearLayout {
     private boolean touchFeedback;
     private final Runnable clearTouchFeedback=new Runnable(){public void run(){touchFeedback=false;invalidate();}};
     private View guideButton;
-    private final Runnable guideListener = new Runnable() { public void run() { mediaHandler.post(new Runnable() { public void run() { if (guideButton != null) { boolean active=GuidanceProxy.active();guideButton.setVisibility(active ? View.VISIBLE : View.INVISIBLE);Diagnostic.set("guide",active ? "active" : "inactive");guideButton.invalidate(); } } }); } };
+    private final Runnable guideListener = new Runnable() { public void run() { mediaHandler.post(new Runnable() { public void run() { if (guideButton != null) { guideButton.setVisibility(View.INVISIBLE);Diagnostic.set("guide","hidden"); } } }); } };
     private int currentMode = -999;
     private String liveTitle, liveArtist;
     private long livePosition = -1, liveDuration = -1;
