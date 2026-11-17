@@ -1,0 +1,1 @@
+package hmgapi.hook; public abstract class MethodHook { protected void beforeHookedMethod(Param p)throws Throwable{} protected void afterHookedMethod(Param p)throws Throwable{} public static class Param { public Object thisObject; public Object[] args; public void setResult(Object v){} } }

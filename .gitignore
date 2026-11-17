@@ -1,0 +1,9 @@
+/build/
+/dist/
+/local/
+*.key
+*.keystore
+*.jks
+*.p12
+*.pfx
+.DS_Store

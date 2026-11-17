@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "settings": [
+    {
+      "key": "bt_osd_mode",
+      "type": "choice",
+      "default": "move",
+      "title": "블루투스 곡 알림",
+      "description": "순정 곡 알림이 표시될 때 나우플레잉을 이동하거나, 내비 지도에서 순정 곡 알림을 숨깁니다.",
+      "options": [
+        {
+          "value": "move",
+          "title": "순정 알림 표시 및 나우플레잉 이동"
+        },
+        {
+          "value": "hide_bt",
+          "title": "내비 지도에서 순정 곡 알림 숨김"
+        }
+      ]
+    },
+    {
+      "key": "progress_enabled",
+      "type": "toggle",
+      "default": true,
+      "title": "재생 진행선 표시",
+      "description": "나우플레잉 표시줄 아래에 재생 진행선을 표시합니다.",
+      "apply": "live"
+    }
+  ]
+}

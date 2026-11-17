@@ -1,0 +1,13 @@
+{
+  "id": "blackr-ccnc-theme-for-5w",
+  "name": "ccNC Theme for 5W",
+  "version": "0.1.0",
+  "description": "Blackr's experimental 5W theme: media information and right-side handle. Media functionality derives from the supplied Local prototype; the original author is unverified.",
+  "authors": ["Blackr"],
+  "live": true,
+  "hooks": {
+    "jar": "hooks.jar",
+    "entry": "dev.ev6.nowplaying.UniversalEntry",
+    "points": {}
+  }
+}

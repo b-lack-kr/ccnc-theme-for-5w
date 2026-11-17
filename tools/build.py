@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+"""Build the single HMG-API mod from the user's supplied original package."""
+import argparse
+import hashlib
+import io
+import os
+from pathlib import Path
+import shutil
+import subprocess
+import zipfile
+
+ROOT = Path(__file__).resolve().parents[1]
+WORKSPACE = ROOT.parent
+TOOLS = WORKSPACE / ".tools"
+EXPECTED_ORIGINAL = "5be94836a030ce6e291d200626252aac53cdd496ce1b3d6d7636566664cee6fc"
+PREFIXES = ("Diagnostic", "RadioArtBridge", "PrototypeViewport", "BottomMediaView",
+            "BtCommandGate", "StockBtControlBridge", "BottomBarLayout", "BottomBarSurface",
+            "GuidanceProxy", "NavScrollMonitor", "UniversalEntry", "TransientNotice")
+EXACT = {"NowPlayingController.class", "NavScrollState.class", "MarqueeTiming.class"}
+
+
+def run(command, **kwargs):
+    subprocess.run([str(x) for x in command], check=True, **kwargs)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--original", required=True, type=Path, help="supplied original 5W ZIP")
+    parser.add_argument("--key", required=True, type=Path, help="HMG-API signing key (never committed)")
+    parser.add_argument("--jdk", type=Path, default=TOOLS / "java-build/jdk-17.0.21+9/Contents/Home")
+    parser.add_argument("--android-jar", type=Path, default=TOOLS / "android-sdk/platforms/android-37.0/android.jar")
+    parser.add_argument("--d8", type=Path, default=TOOLS / "android-sdk/build-tools/36.0.0/d8")
+    parser.add_argument("--dexlib", type=Path, default=TOOLS / "android-sdk/cmdline-tools/latest/lib/external/com/android/tools/smali/smali-dexlib2/3.0.9/smali-dexlib2-3.0.9.jar")
+    parser.add_argument("--guava", type=Path, default=TOOLS / "android-sdk/cmdline-tools/latest/lib/external/com/google/guava/guava/33.4.0-jre/guava-33.4.0-jre.jar")
+    parser.add_argument("--signing-classpath", type=Path, default=WORKSPACE / "simulation_source/build/signclasses")
+    args = parser.parse_args()
+    for value in (args.original, args.key, args.jdk / "bin/java", args.jdk / "bin/javac", args.android_jar, args.d8, args.dexlib, args.guava, args.signing_classpath):
+        if not value.exists():
+            parser.error("required input does not exist: " + str(value))
+    build = ROOT / "build"
+    if build.exists():
+        shutil.rmtree(build)
+    classes, dex, mod = build / "classes", build / "dex", build / "mod"
+    for directory in (classes, dex, mod):
+        directory.mkdir(parents=True)
+    with zipfile.ZipFile(args.original) as outer:
+        with zipfile.ZipFile(io.BytesIO(outer.read("INSTALL/mod.zip"))) as original_mod:
+            with zipfile.ZipFile(io.BytesIO(original_mod.read("hooks.jar"))) as original_hook:
+                original = original_hook.read("classes.dex")
+    if hashlib.sha256(original).hexdigest() != EXPECTED_ORIGINAL:
+        raise SystemExit("Unsupported original hooks.dex; expected supplied 0.5.1 package")
+    (build / "original.dex").write_bytes(original)
+    javac, java = args.jdk / "bin/javac", args.jdk / "bin/java"
+    sources = sorted((ROOT / "src").rglob("*.java")) + sorted((ROOT / "stubs").rglob("*.java"))
+    tests = sorted((ROOT / "tests").glob("*.java"))
+    run([javac, "-source", "8", "-target", "8", "-cp", args.android_jar, "-d", classes, *sources, *tests])
+    for test in ("dev.ev6.nowplaying.StateTest", "dev.ev6.nowplaying.LayoutTest",
+                 "dev.ev6.nowplaying.MarqueeTimingTest", "GestureTest", "GateTest"):
+        run([java, "-cp", classes, test])
+    package_classes = classes / "dev/ev6/nowplaying"
+    replacements = [p for p in sorted(package_classes.glob("*.class"))
+                    if p.name in EXACT or any(p.name.startswith(prefix) for prefix in PREFIXES)]
+    replacements += sorted((classes / "dev/ev6/edge").glob("EdgeHandle*.class"))
+    env = dict(os.environ, JAVA_HOME=str(args.jdk.resolve()))
+    run([args.d8, "--min-api", "19", "--lib", args.android_jar, "--output", dex, *replacements], env=env)
+    cp = os.pathsep.join((str(args.dexlib), str(args.guava)))
+    run([javac, "-cp", cp, "-d", build, ROOT / "tools/Merge.java"])
+    run([java, "-cp", os.pathsep.join((str(build), cp)), "Merge", build / "original.dex", dex / "classes.dex", build / "merged.dex"])
+    for name in ("mod.json", "settings.json"):
+        shutil.copy2(ROOT / "package" / name, mod / name)
+    with zipfile.ZipFile(mod / "hooks.jar", "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.write(build / "merged.dex", "classes.dex")
+    run([java, "-cp", args.signing_classpath, "hmgapi.engine.Signing", "sign", mod, args.key])
+    release = ROOT / "dist"
+    release.mkdir(exist_ok=True)
+    out = release / "ccnc-theme-for-5w-mod.zip"
+    with zipfile.ZipFile(out, "w", zipfile.ZIP_DEFLATED) as archive:
+        for item in sorted(mod.rglob("*")):
+            if item.is_file():
+                archive.write(item, item.relative_to(mod).as_posix())
+    print("Signed mod:", out)
+
+
+if __name__ == "__main__":
+    main()
