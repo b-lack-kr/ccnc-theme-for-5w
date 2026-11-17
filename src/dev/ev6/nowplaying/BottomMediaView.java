@@ -47,7 +47,10 @@ public final class BottomMediaView extends LinearLayout {
     private boolean touchFeedback;
     private final Runnable clearTouchFeedback=new Runnable(){public void run(){touchFeedback=false;invalidate();}};
     private View guideButton;
-    private final Runnable guideListener = new Runnable() { public void run() { mediaHandler.post(new Runnable() { public void run() { if (guideButton != null) { guideButton.setVisibility(View.INVISIBLE);Diagnostic.set("guide","hidden"); } } }); } };
+    private final AppSlot appSlot;
+    private boolean longPressed;
+    private final Runnable openSettings = new Runnable(){public void run(){if(pointer!=-1&&!moved){longPressed=true;touchFeedback=false;invalidate();appSlot.showSettings();}}};
+    private final Runnable guideListener = new Runnable() { public void run() { mediaHandler.post(new Runnable() { public void run() { if (guideButton != null) { guideButton.setVisibility(View.GONE);Diagnostic.set("guide","hidden"); } } }); } };
     private int currentMode = -999;
     private String liveTitle, liveArtist;
     private long livePosition = -1, liveDuration = -1;
@@ -70,7 +73,7 @@ public final class BottomMediaView extends LinearLayout {
     private final Runnable mediaPoll = new Runnable() { public void run() {
         updateTheme();
         int mode = AndroidRealMode.read(getContext().getClassLoader());
-        if (mode != currentMode) { currentMode = mode; clearLive(); requestStock(); }
+        if (mode != currentMode) { currentMode = mode; setPlaying(null); clearLive(); requestStock(); }
         mediaHandler.postDelayed(this, 1000L);
     }};
     private final BroadcastReceiver mediaReceiver = new BroadcastReceiver() { public void onReceive(Context c, Intent intent) { receiveStock(intent); } };
@@ -115,10 +118,13 @@ public final class BottomMediaView extends LinearLayout {
             }
         };
         guideButton.setContentDescription("길안내 목록 열기 또는 접기");
-        guideButton.setVisibility(View.INVISIBLE);
+        guideButton.setVisibility(View.GONE);
         guideButton.setOnTouchListener(new View.OnTouchListener(){public boolean onTouch(View v,MotionEvent e){int action=e.getActionMasked();if(action==MotionEvent.ACTION_DOWN){v.animate().cancel();v.animate().scaleX(0.94f).scaleY(0.94f).setDuration(80).start();}else if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL){v.animate().cancel();v.animate().scaleX(1f).scaleY(1f).setDuration(120).start();}return false;}});
         guideButton.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ toggleStockGuidance(); }});
         addView(guideButton,new LinearLayout.LayoutParams(125,-1));
+        appSlot=new AppSlot(context);
+        appSlot.setMediaAction(new Runnable(){public void run(){new StockBtControlBridge().togglePlayback();}});
+        addView(appSlot,new LinearLayout.LayoutParams(125,-1));
         ImageView imageView = new ImageView(context);
         this.artwork = imageView;
         notice.setArtworkSource(imageView);
@@ -133,6 +139,8 @@ public final class BottomMediaView extends LinearLayout {
         layoutParams.leftMargin = dp(6);
         layoutParams.rightMargin = dp(4);
         addView(linearLayout, layoutParams);
+        appSlot.setPlacementChanged(new Runnable(){public void run(){placeAppSlot();}});
+        placeAppSlot();
         TextView textViewText = text(19, -1, 1);
         this.title = textViewText;
         TextView textViewText2 = text(16, -1906708, 1);
@@ -186,8 +194,32 @@ public final class BottomMediaView extends LinearLayout {
         artist.setTextColor(light ? 0xff5c6568 : 0xffe2e7ec);
         artwork.setBackgroundColor(light ? 0xffccd0d3 : -12893877);
         if(guideButton!=null)guideButton.invalidate();
+        appSlot.refresh();
         if(projectionFallback)showArtwork(null);
         invalidate();
+    }
+
+    private void placeAppSlot(){
+        if(appSlot.getParent()!=this)return;
+        removeView(appSlot);
+        int position=appSlot.onRight()?getChildCount():indexOfChild(artwork);
+        addView(appSlot,Math.max(0,position),new LinearLayout.LayoutParams(125,-1));
+        resizeBar();
+        invalidate();
+    }
+
+    private void resizeBar(){
+        android.view.ViewGroup.LayoutParams p=getLayoutParams();
+        int width=appSlot.isNone()?515:640;
+        if(p==null||p.width<=1||p.width==width)return;
+        if(p instanceof android.view.WindowManager.LayoutParams){
+            android.view.WindowManager.LayoutParams w=(android.view.WindowManager.LayoutParams)p;
+            int right=w.x+w.width;w.x=right-width;w.width=width;
+            try{((android.view.WindowManager)getContext().getSystemService(Context.WINDOW_SERVICE)).updateViewLayout(this,w);}catch(RuntimeException ignored){}
+        }else if(p instanceof android.widget.FrameLayout.LayoutParams){
+            android.widget.FrameLayout.LayoutParams f=(android.widget.FrameLayout.LayoutParams)p;
+            int right=f.leftMargin+f.width;f.leftMargin=right-width;f.width=width;setLayoutParams(f);
+        }
     }
 
     private void showArtwork(Bitmap bitmap) {
@@ -296,6 +328,7 @@ public final class BottomMediaView extends LinearLayout {
     public void setPlaying(Boolean bool) {
         int i;
         this.playing = bool;
+        appSlot.setPlaying(bool);
         TransportIcon transportIcon = this.play;
         if (bool == null) {
             i = 4;
@@ -331,13 +364,14 @@ public final class BottomMediaView extends LinearLayout {
     @Override // android.view.ViewGroup, android.view.View
     protected void dispatchDraw(Canvas canvas) {
         super.dispatchDraw(canvas);
-        float progressStart = guideButton != null ? guideButton.getRight() : 0f;
+        boolean slotVisible=appSlot.getVisibility()==View.VISIBLE;
+        float progressStart = slotVisible&&!appSlot.onRight() ? appSlot.getRight() : 0f, progressEnd = slotVisible&&appSlot.onRight()?appSlot.getLeft():getWidth();
         if(this.progressEnabled && this.progress >= 0.0f){
             int iMax=Math.max(0,getHeight()-3);this.progressPaint.setColor(Boolean.TRUE.equals(lightTheme)?0x663f484b:1728053247);float f=iMax;
-            canvas.drawRect(progressStart,f,getWidth(),getHeight(),this.progressPaint);this.progressPaint.setColor(-10887960);
-            canvas.drawRect(progressStart,f,progressStart+(getWidth()-progressStart)*this.progress,getHeight(),this.progressPaint);
+            canvas.drawRect(progressStart,f,progressEnd,getHeight(),this.progressPaint);this.progressPaint.setColor(-10887960);
+            canvas.drawRect(progressStart,f,progressStart+(progressEnd-progressStart)*this.progress,getHeight(),this.progressPaint);
         }
-        if(touchFeedback){this.progressPaint.setColor(Boolean.TRUE.equals(lightTheme)?0x26293438:0x40ffffff);canvas.drawRect(progressStart,0,getWidth(),getHeight(),this.progressPaint);}
+        if(touchFeedback){this.progressPaint.setColor(Boolean.TRUE.equals(lightTheme)?0x26293438:0x40ffffff);canvas.drawRect(progressStart,0,progressEnd,getHeight(),this.progressPaint);}
     }
 
     public void setControls(Controls controls) {
@@ -372,6 +406,7 @@ public final class BottomMediaView extends LinearLayout {
     @Override protected void onDetachedFromWindow() {
         GuidanceProxy.unlisten(guideListener);
         notice.reset();
+        mediaHandler.removeCallbacks(openSettings);
         mediaHandler.removeCallbacks(mediaPoll);
         mediaHandler.removeCallbacks(clearTouchFeedback);touchFeedback=false;
         if (registered) { try { getContext().unregisterReceiver(mediaReceiver); } catch (RuntimeException ignored) {} registered = false; }
@@ -470,14 +505,15 @@ public final class BottomMediaView extends LinearLayout {
     @Override public boolean onTouchEvent(MotionEvent event) {
         switch (event.getActionMasked()) {
         case MotionEvent.ACTION_DOWN:
-            mediaHandler.removeCallbacks(clearTouchFeedback);touchFeedback=true;invalidate();pointer = event.getPointerId(0); downX = event.getX(); downY = event.getY(); downTime = event.getEventTime(); moved = false; return true;
+            mediaHandler.removeCallbacks(clearTouchFeedback);mediaHandler.removeCallbacks(openSettings);touchFeedback=true;invalidate();pointer = event.getPointerId(0); downX = event.getX(); downY = event.getY(); downTime = event.getEventTime(); moved = false;longPressed=false;mediaHandler.postDelayed(openSettings,ViewConfiguration.getLongPressTimeout()); return true;
         case MotionEvent.ACTION_MOVE:
-            if (Math.abs(event.getX() - downX) > ViewConfiguration.get(getContext()).getScaledTouchSlop() || Math.abs(event.getY() - downY) > ViewConfiguration.get(getContext()).getScaledTouchSlop()) { moved = true;touchFeedback=false;invalidate(); }
+            if (Math.abs(event.getX() - downX) > ViewConfiguration.get(getContext()).getScaledTouchSlop() || Math.abs(event.getY() - downY) > ViewConfiguration.get(getContext()).getScaledTouchSlop()) { moved = true;mediaHandler.removeCallbacks(openSettings);touchFeedback=false;invalidate(); }
             return true;
-        case MotionEvent.ACTION_POINTER_DOWN: pointer = -1;touchFeedback=false;invalidate(); return true;
-        case MotionEvent.ACTION_CANCEL: pointer = -1;touchFeedback=false;invalidate(); return true;
+        case MotionEvent.ACTION_POINTER_DOWN: pointer = -1;mediaHandler.removeCallbacks(openSettings);touchFeedback=false;invalidate(); return true;
+        case MotionEvent.ACTION_CANCEL: pointer = -1;mediaHandler.removeCallbacks(openSettings);touchFeedback=false;invalidate(); return true;
         case MotionEvent.ACTION_UP:
-            if (pointer == event.getPointerId(0)) {
+            mediaHandler.removeCallbacks(openSettings);
+            if (!longPressed && pointer == event.getPointerId(0)) {
                 float dx = event.getX() - downX, dy = event.getY() - downY;
                 float threshold = Math.max(dp(48), ViewConfiguration.get(getContext()).getScaledTouchSlop() * 2);
                 if (Math.abs(dx) >= threshold && Math.abs(dx) > Math.abs(dy) * 1.5f && controls != null) {

@@ -62,6 +62,14 @@ public final class StockBtControlBridge {
     public synchronized boolean invoke(Command command) {
         if (command == null) return false;
         int code = command == Command.PREVIOUS ? 166 : command == Command.NEXT ? 167 : android.view.KeyEvent.keyCodeFromString("KEYCODE_SHORTCUT_MEDIA");
+        return inject(code);
+    }
+
+    public synchronized boolean togglePlayback() {
+        return inject(android.view.KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE);
+    }
+
+    private boolean inject(int code) {
         if (code == android.view.KeyEvent.KEYCODE_UNKNOWN) return false;
         try {
             Class<?> cls = Class.forName("android.hardware.input.InputManager");

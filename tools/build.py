@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE = ROOT.parent
 TOOLS = WORKSPACE / ".tools"
 EXPECTED_ORIGINAL = "5be94836a030ce6e291d200626252aac53cdd496ce1b3d6d7636566664cee6fc"
-PREFIXES = ("Diagnostic", "RadioArtBridge", "PrototypeViewport", "BottomMediaView",
+PREFIXES = ("AppSlot", "Diagnostic", "RadioArtBridge", "PrototypeViewport", "BottomMediaView",
             "BtCommandGate", "StockBtControlBridge", "BottomBarLayout", "BottomBarSurface",
             "GuidanceProxy", "NavScrollMonitor", "UniversalEntry", "TransientNotice")
 EXACT = {"NowPlayingController.class", "NavScrollState.class", "MarqueeTiming.class"}

@@ -2,6 +2,8 @@ package dev.ev6.nowplaying;
 
 /* JADX INFO: loaded from: classes.dex */
 public final class BottomBarLayout {
+    private static volatile boolean compact = true;
+    static void setCompact(boolean value) { compact = value; }
 
     public static final class Result {
         public final BarPlacement.Box artwork;
@@ -44,10 +46,10 @@ public final class BottomBarLayout {
         if (i4 < 284) {
             return null;
         }
-        int rowLeft = iMin - 644;
+        int rowLeft = iMin - (compact ? 519 : 644);
         if (rowLeft < 288) return null;
         BarPlacement.Box box2 = new BarPlacement.Box(rowLeft, 635, iMin - 4, 720);
-        BarPlacement.Box box3 = new BarPlacement.Box(rowLeft + 125, 635, rowLeft + 210, 720);
+        BarPlacement.Box box3 = new BarPlacement.Box(rowLeft, 635, rowLeft + 85, 720);
         int i5 = iMin - 126;
         BarPlacement.Box box4 = new BarPlacement.Box(iMin - 189, 635, i5, 720);
         int i6 = iMin - 63;
