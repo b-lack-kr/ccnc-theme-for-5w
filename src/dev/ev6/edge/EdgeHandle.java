@@ -68,8 +68,8 @@ public final class EdgeHandle extends ModEntry {
    View panel=findWindow("com.mobis.splitscreen.right");
    if(panel==null||!panel.isShown()||panel.getWidth()<=0){handle.setVisibility(View.INVISIBLE);return;}
    int[] location=new int[2];panel.getLocationOnScreen(location);
-   // Mirror the closed handle's inset from the right screen edge at the panel's left edge.
-   x=Math.max(0,location[0]-61);
+   // Keep the open handle just inside the panel's left edge.
+   x=Math.max(0,location[0]-56);
   }
   WindowManager.LayoutParams p=(WindowManager.LayoutParams)root.getLayoutParams();
   if(p.x!=x){p.x=x;((WindowManager)root.getContext().getSystemService(Context.WINDOW_SERVICE)).updateViewLayout(root,p);}
