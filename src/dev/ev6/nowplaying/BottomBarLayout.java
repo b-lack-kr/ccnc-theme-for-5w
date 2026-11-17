@@ -44,10 +44,10 @@ public final class BottomBarLayout {
         if (i4 < 284) {
             return null;
         }
-        int rowLeft = proxy ? iMin - 653 : i4;
+        int rowLeft = iMin - 644;
         if (rowLeft < 288) return null;
-        BarPlacement.Box box2 = new BarPlacement.Box(rowLeft - 4, 635, iMin - 4, 720);
-        BarPlacement.Box box3 = new BarPlacement.Box(i4, 635, i4 + 85, 720);
+        BarPlacement.Box box2 = new BarPlacement.Box(rowLeft, 635, iMin - 4, 720);
+        BarPlacement.Box box3 = new BarPlacement.Box(rowLeft + 125, 635, rowLeft + 210, 720);
         int i5 = iMin - 126;
         BarPlacement.Box box4 = new BarPlacement.Box(iMin - 189, 635, i5, 720);
         int i6 = iMin - 63;

@@ -47,7 +47,7 @@ public final class BottomMediaView extends LinearLayout {
     private boolean touchFeedback;
     private final Runnable clearTouchFeedback=new Runnable(){public void run(){touchFeedback=false;invalidate();}};
     private View guideButton;
-    private final Runnable guideListener = new Runnable() { public void run() { mediaHandler.post(new Runnable() { public void run() { if (guideButton != null) { boolean active=GuidanceProxy.active();guideButton.setVisibility(active ? View.VISIBLE : View.GONE);Diagnostic.set("guide",active ? "active" : "inactive");guideButton.invalidate(); } } }); } };
+    private final Runnable guideListener = new Runnable() { public void run() { mediaHandler.post(new Runnable() { public void run() { if (guideButton != null) { boolean active=GuidanceProxy.active();guideButton.setVisibility(active ? View.VISIBLE : View.INVISIBLE);Diagnostic.set("guide",active ? "active" : "inactive");guideButton.invalidate(); } } }); } };
     private int currentMode = -999;
     private String liveTitle, liveArtist;
     private long livePosition = -1, liveDuration = -1;
@@ -115,10 +115,10 @@ public final class BottomMediaView extends LinearLayout {
             }
         };
         guideButton.setContentDescription("길안내 목록 열기 또는 접기");
-        guideButton.setVisibility(View.GONE);
+        guideButton.setVisibility(View.INVISIBLE);
         guideButton.setOnTouchListener(new View.OnTouchListener(){public boolean onTouch(View v,MotionEvent e){int action=e.getActionMasked();if(action==MotionEvent.ACTION_DOWN){v.animate().cancel();v.animate().scaleX(0.94f).scaleY(0.94f).setDuration(80).start();}else if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL){v.animate().cancel();v.animate().scaleX(1f).scaleY(1f).setDuration(120).start();}return false;}});
         guideButton.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ toggleStockGuidance(); }});
-        addView(guideButton,new LinearLayout.LayoutParams(138,-1));
+        addView(guideButton,new LinearLayout.LayoutParams(125,-1));
         ImageView imageView = new ImageView(context);
         this.artwork = imageView;
         notice.setArtworkSource(imageView);
@@ -331,7 +331,7 @@ public final class BottomMediaView extends LinearLayout {
     @Override // android.view.ViewGroup, android.view.View
     protected void dispatchDraw(Canvas canvas) {
         super.dispatchDraw(canvas);
-        float progressStart = guideButton != null && guideButton.getVisibility() == View.VISIBLE ? guideButton.getRight() : 0f;
+        float progressStart = guideButton != null ? guideButton.getRight() : 0f;
         if(this.progressEnabled && this.progress >= 0.0f){
             int iMax=Math.max(0,getHeight()-3);this.progressPaint.setColor(Boolean.TRUE.equals(lightTheme)?0x663f484b:1728053247);float f=iMax;
             canvas.drawRect(progressStart,f,getWidth(),getHeight(),this.progressPaint);this.progressPaint.setColor(-10887960);
