@@ -6,6 +6,7 @@ import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -57,15 +58,19 @@ final class AppSlot extends android.widget.FrameLayout {
  void setPlaying(Boolean value){playing=value;if("control".equals(mode())){mediaIcon.invalidateSelf();icon.invalidate();}}
  void refresh(){String m=mode();BottomBarLayout.setCompact("none".equals(m));setVisibility("none".equals(m)?View.GONE:View.VISIBLE);setContentDescription("apps".equals(m)?"앱스":"control".equals(m)?"재생 또는 일시정지":"즐겨찾기 앱");Drawable d="control".equals(m)?mediaIcon:gridIcon;if("favorite".equals(m)){try{d=getContext().getPackageManager().getApplicationIcon(prefs.getString(FAVORITE,""));}catch(Exception ignored){}}icon.setImageDrawable(null);icon.setImageDrawable(d);invalidate();if(placementChanged!=null)placementChanged.run();}
  private Activity activity(){return getContext() instanceof Activity?(Activity)getContext():null;}
+ private AlertDialog.Builder dialogBuilder(Activity a){return new AlertDialog.Builder(a,isLight()?AlertDialog.THEME_HOLO_LIGHT:AlertDialog.THEME_HOLO_DARK);}
+ private int dialogTextColor(){return isLight()?0xff30383b:0xffe5eaed;}
+ private ColorStateList radioTextColors(){int normal=dialogTextColor(),disabled=isLight()?0xff92999d:0xff80898d;return new ColorStateList(new int[][]{new int[]{-android.R.attr.state_enabled},new int[]{}},new int[]{disabled,normal});}
  void showSettings(){final Activity a=activity();if(a==null||a.isFinishing())return;final String m=mode();
   try{
-   LinearLayout content=new LinearLayout(a);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(32,12,32,12);
-   TextView modeTitle=new TextView(a);modeTitle.setText("버튼 기능");content.addView(modeTitle);
-   final android.widget.RadioGroup modes=new android.widget.RadioGroup(a);String[] labels={"None","Apps","Favorites App","Media Control"};for(int i=0;i<labels.length;i++){android.widget.RadioButton b=new android.widget.RadioButton(a);b.setId(100+i);b.setText(labels[i]);modes.addView(b);}content.addView(modes);
-   TextView positionTitle=new TextView(a);positionTitle.setText("버튼 위치");content.addView(positionTitle);
-   final android.widget.RadioGroup positions=new android.widget.RadioGroup(a);positions.setOrientation(LinearLayout.HORIZONTAL);for(int i=0;i<2;i++){android.widget.RadioButton b=new android.widget.RadioButton(a);b.setId(200+i);b.setText(i==0?"왼쪽":"오른쪽");b.setEnabled(!"none".equals(m));positions.addView(b);}content.addView(positions);
+   AlertDialog.Builder builder=dialogBuilder(a);Context themed=builder.getContext();
+   LinearLayout content=new LinearLayout(themed);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(32,12,32,12);
+   TextView modeTitle=new TextView(themed);modeTitle.setTextColor(dialogTextColor());modeTitle.setText("버튼 기능");content.addView(modeTitle);
+   final android.widget.RadioGroup modes=new android.widget.RadioGroup(themed);String[] labels={"None","Apps","Favorites App","Media Control"};for(int i=0;i<labels.length;i++){android.widget.RadioButton b=new android.widget.RadioButton(themed);b.setTextColor(radioTextColors());b.setId(100+i);b.setText(labels[i]);modes.addView(b);}content.addView(modes);
+   TextView positionTitle=new TextView(themed);positionTitle.setTextColor(dialogTextColor());positionTitle.setText("버튼 위치");content.addView(positionTitle);
+   final android.widget.RadioGroup positions=new android.widget.RadioGroup(themed);positions.setOrientation(LinearLayout.HORIZONTAL);for(int i=0;i<2;i++){android.widget.RadioButton b=new android.widget.RadioButton(themed);b.setTextColor(radioTextColors());b.setId(200+i);b.setText(i==0?"왼쪽":"오른쪽");b.setEnabled(!"none".equals(m));positions.addView(b);}content.addView(positions);
    modes.check("apps".equals(m)?101:"favorite".equals(m)?102:"control".equals(m)?103:100);positions.check(onRight()?201:200);
-   final AlertDialog dialog=new AlertDialog.Builder(a).setTitle("미디어 창 설정").setView(content).setNegativeButton("닫기",null).create();
+   final AlertDialog dialog=builder.setTitle("미디어 창 설정").setView(content).setNegativeButton("닫기",null).create();
    modes.setOnCheckedChangeListener(new android.widget.RadioGroup.OnCheckedChangeListener(){public void onCheckedChanged(android.widget.RadioGroup g,int id){dialog.dismiss();if(id==102){showApps(true);return;}prefs.edit().putString(MODE,id==101?"apps":id==103?"control":"none").apply();refresh();}});
    positions.setOnCheckedChangeListener(new android.widget.RadioGroup.OnCheckedChangeListener(){public void onCheckedChanged(android.widget.RadioGroup g,int id){if("none".equals(mode()))return;prefs.edit().putString(POSITION,id==201?"right":"left").apply();refresh();}});
    dialog.show();
@@ -77,8 +82,9 @@ final class AppSlot extends android.widget.FrameLayout {
   Collections.sort(out,new Comparator<Entry>(){public int compare(Entry a,Entry b){return a.label.compareToIgnoreCase(b.label);}});return out;
  }
  private void showApps(final boolean choose){final Activity a=activity();if(a==null||a.isFinishing())return;final List<Entry> list=apps();if(list.isEmpty()){Toast.makeText(a,"실행 가능한 앱이 없습니다",Toast.LENGTH_SHORT).show();return;}
-  final GridView grid=new GridView(a);grid.setNumColumns(4);grid.setGravity(Gravity.CENTER);grid.setPadding(16,12,16,12);grid.setAdapter(new BaseAdapter(){public int getCount(){return list.size();}public Object getItem(int n){return list.get(n);}public long getItemId(int n){return n;}public View getView(int n,View old,ViewGroup parent){Entry e=list.get(n);LinearLayout box=new LinearLayout(a);box.setOrientation(LinearLayout.VERTICAL);box.setGravity(Gravity.CENTER);box.setPadding(8,12,8,12);ImageView image=new ImageView(a);image.setImageDrawable(e.icon);box.addView(image,new LinearLayout.LayoutParams(64,64));TextView text=new TextView(a);text.setGravity(Gravity.CENTER);text.setText(e.label);text.setMaxLines(2);box.addView(text,new LinearLayout.LayoutParams(-1,-2));return box;}});
-  try{final AlertDialog dialog=new AlertDialog.Builder(a).setTitle(choose?"즐겨찾기 앱 선택":"Apps").setView(grid).setNegativeButton("닫기",null).create();grid.setOnItemClickListener(new android.widget.AdapterView.OnItemClickListener(){public void onItemClick(android.widget.AdapterView<?> p,View v,int n,long id){Entry e=list.get(n);dialog.dismiss();if(choose){prefs.edit().putString(FAVORITE,e.pkg).putString(MODE,"favorite").apply();refresh();}else launch(e.pkg);}});dialog.show();}catch(RuntimeException ignored){}
+  AlertDialog.Builder builder=dialogBuilder(a);final Context themed=builder.getContext();
+  final GridView grid=new GridView(themed);grid.setNumColumns(4);grid.setGravity(Gravity.CENTER);grid.setPadding(16,12,16,12);grid.setAdapter(new BaseAdapter(){public int getCount(){return list.size();}public Object getItem(int n){return list.get(n);}public long getItemId(int n){return n;}public View getView(int n,View old,ViewGroup parent){Entry e=list.get(n);LinearLayout box=new LinearLayout(themed);box.setOrientation(LinearLayout.VERTICAL);box.setGravity(Gravity.CENTER);box.setPadding(8,12,8,12);ImageView image=new ImageView(themed);image.setImageDrawable(e.icon);box.addView(image,new LinearLayout.LayoutParams(64,64));TextView text=new TextView(themed);text.setTextColor(dialogTextColor());text.setGravity(Gravity.CENTER);text.setText(e.label);text.setMaxLines(2);box.addView(text,new LinearLayout.LayoutParams(-1,-2));return box;}});
+  try{final AlertDialog dialog=builder.setTitle(choose?"즐겨찾기 앱 선택":"Apps").setView(grid).setNegativeButton("닫기",null).create();grid.setOnItemClickListener(new android.widget.AdapterView.OnItemClickListener(){public void onItemClick(android.widget.AdapterView<?> p,View v,int n,long id){Entry e=list.get(n);dialog.dismiss();if(choose){prefs.edit().putString(FAVORITE,e.pkg).putString(MODE,"favorite").apply();refresh();}else launch(e.pkg);}});dialog.show();}catch(RuntimeException ignored){}
  }
  private void launch(String pkg){try{Intent i=getContext().getPackageManager().getLaunchIntentForPackage(pkg);if(i==null)throw new IllegalStateException();i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);getContext().startActivity(i);}catch(RuntimeException e){Toast.makeText(getContext(),"앱을 열 수 없습니다. 설정에서 다시 선택해 주세요.",Toast.LENGTH_SHORT).show();}}
 }
