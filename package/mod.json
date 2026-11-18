@@ -1,10 +1,11 @@
 {
   "id": "blackr-ccnc-theme-for-5w",
   "name": "ccNC Theme for 5W",
-  "version": "0.1.16",
+  "version": "0.1.30",
   "description": "blackr's experimental 5W theme: media information and right-side handle.",
   "authors": ["blackr"],
   "live": true,
+  "apps": [{"apk": "app/Shortcuts.apk", "package": "dev.blackr.ccnc.shortcuts"}],
   "input": [
     {"key": "navi", "press": "short", "stock": "replace", "send": "navi hold", "when": "settings.navi_swap_enabled"},
     {"key": "navi", "press": "hold", "send": "navi short", "when": "settings.navi_swap_enabled"}

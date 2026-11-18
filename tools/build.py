@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import io
 import os
+import secrets
 from pathlib import Path
 import shutil
 import subprocess
@@ -15,7 +16,7 @@ TOOLS = WORKSPACE / ".tools"
 EXPECTED_ORIGINAL = "5be94836a030ce6e291d200626252aac53cdd496ce1b3d6d7636566664cee6fc"
 PREFIXES = ("AppSlot", "NavKeySwap", "Diagnostic", "RadioArtBridge", "PrototypeViewport", "BottomMediaView",
             "BtCommandGate", "StockBtControlBridge", "BottomBarLayout", "BottomBarSurface",
-            "GuidanceProxy", "NavScrollMonitor", "UniversalEntry", "TransientNotice")
+            "GuidanceProxy", "GuideOverlay", "OsdModePolicy", "NavScrollMonitor", "UniversalEntry", "TransientNotice")
 EXACT = {"NowPlayingController.class", "NavScrollState.class", "MarqueeTiming.class"}
 
 
@@ -55,7 +56,7 @@ def main():
     tests = sorted((ROOT / "tests").glob("*.java"))
     run([javac, "-source", "8", "-target", "8", "-cp", args.android_jar, "-d", classes, *sources, *tests])
     for test in ("dev.ev6.nowplaying.StateTest", "dev.ev6.nowplaying.LayoutTest",
-                 "dev.ev6.nowplaying.MarqueeTimingTest", "GestureTest", "GateTest", "dev.ev6.edge.EdgeGestureTest"):
+                 "dev.ev6.nowplaying.MarqueeTimingTest", "dev.ev6.edge.EdgePageMappingTest", "GestureTest", "GateTest"):
         run([java, "-cp", classes, test])
     package_classes = classes / "dev/ev6/nowplaying"
     replacements = [p for p in sorted(package_classes.glob("*.class"))
@@ -66,6 +67,36 @@ def main():
     cp = os.pathsep.join((str(args.dexlib), str(args.guava)))
     run([javac, "-cp", cp, "-d", build, ROOT / "tools/Merge.java"])
     run([java, "-cp", os.pathsep.join((str(build), cp)), "Merge", build / "original.dex", dex / "classes.dex", build / "merged.dex"])
+    # Two launcher activities in one locally signed APK. Keep this signing key for updates.
+    local = ROOT / "local"
+    local.mkdir(exist_ok=True)
+    keyfile, passfile = local / "shortcuts.keystore", local / "shortcuts-password"
+    if not keyfile.exists():
+        if passfile.exists():
+            raise SystemExit("Shortcut signing key is missing; restore it before building")
+        passfile.write_text(secrets.token_urlsafe(32))
+        passfile.chmod(0o600)
+        keyenv = dict(os.environ, CCNC_SHORTCUT_PASSWORD=passfile.read_text().strip())
+        run([args.jdk / "bin/keytool", "-genkeypair", "-keystore", keyfile, "-storetype", "PKCS12", "-alias", "ccnc", "-keyalg", "RSA", "-keysize", "2048", "-validity", "10000", "-dname", "CN=ccNC Theme for 5W", "-storepass:env", "CCNC_SHORTCUT_PASSWORD", "-keypass:env", "CCNC_SHORTCUT_PASSWORD"], env=keyenv)
+    if not passfile.exists():
+        raise SystemExit("Shortcut signing password is missing; restore it before building")
+    apkbuild = build / "shortcut"
+    apkclasses, apkdex = apkbuild / "classes", apkbuild / "dex"
+    apkclasses.mkdir(parents=True); apkdex.mkdir()
+    apksources = sorted((ROOT / "shortcuts/src").rglob("*.java"))
+    run([javac, "-source", "8", "-target", "8", "-cp", args.android_jar, "-d", apkclasses, *apksources])
+    run([args.d8, "--min-api", "19", "--lib", args.android_jar, "--output", apkdex, *sorted(apkclasses.rglob("*.class"))], env=env)
+    apptools = args.d8.parent
+    raw = apkbuild / "unsigned.apk"
+    run([apptools / "aapt", "package", "-f", "-M", ROOT / "shortcuts/AndroidManifest.xml", "-I", args.android_jar, "-F", raw])
+    with zipfile.ZipFile(raw, "a", zipfile.ZIP_DEFLATED) as archive:
+        archive.write(apkdex / "classes.dex", "classes.dex")
+    aligned = apkbuild / "aligned.apk"
+    run([apptools / "zipalign", "-f", "4", raw, aligned])
+    appdir = mod / "app"; appdir.mkdir()
+    keyenv = dict(env, CCNC_SHORTCUT_PASSWORD=passfile.read_text().strip())
+    run([apptools / "apksigner", "sign", "--ks", keyfile, "--ks-key-alias", "ccnc", "--ks-pass", "env:CCNC_SHORTCUT_PASSWORD", "--key-pass", "env:CCNC_SHORTCUT_PASSWORD", "--out", appdir / "Shortcuts.apk", aligned], env=keyenv)
+    run([apptools / "apksigner", "verify", "--min-sdk-version", "19", appdir / "Shortcuts.apk"], env=env)
     for name in ("mod.json", "settings.json"):
         shutil.copy2(ROOT / "package" / name, mod / name)
     with zipfile.ZipFile(mod / "hooks.jar", "w", zipfile.ZIP_DEFLATED) as archive:

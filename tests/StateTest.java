@@ -15,6 +15,10 @@ public final class StateTest {
   if(!"Search_Places".equals(NavScrollState.sceneName(search,2133,now-1000,now)))throw new AssertionError("search scene");
   if(NavScrollState.sceneName(search,9999,now-1000,now)!=null)throw new AssertionError("search wrong pid");
   if(NavScrollState.sceneName(search,2133,now+1000,now)!=null)throw new AssertionError("stale search");
-  GuidanceProxy.set(null);if(GuidanceProxy.expanded()!=null)throw new AssertionError("unknown");System.out.println("PASS: observed open, closed, wrong process and unknown state");
+  String state=prefix+"0), tripVisible(0), isOffRoute(1), other(0)";
+  NavScrollState.guidance(state,2133,now-1000,now);if(GuidanceProxy.displayable())throw new AssertionError("off route hides button");
+  NavScrollState.guidance(state.replace("isOffRoute(1)","isOffRoute(0)"),2133,now-1000,now);if(!GuidanceProxy.displayable())throw new AssertionError("on route enables button");
+  NavScrollState.guidance(state,9999,now-1000,now);if(!GuidanceProxy.displayable())throw new AssertionError("off route wrong pid");
+  GuidanceProxy.set(null);if(GuidanceProxy.displayable())throw new AssertionError("unknown visibility");if(GuidanceProxy.expanded()!=null)throw new AssertionError("unknown");System.out.println("PASS: observed open, closed, wrong process and unknown state");
  }
 }

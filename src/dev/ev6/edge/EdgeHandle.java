@@ -13,6 +13,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
+import android.view.Gravity;
+import android.content.res.Configuration;
 import hmgapi.hook.LoadedApp;
 import hmgapi.hook.ModContext;
 import hmgapi.hook.ModEntry;
@@ -29,11 +31,12 @@ public final class EdgeHandle extends ModEntry {
  private float firstAlpha,secondAlpha;
  private Handle handle;
  private View scrollGuide; private float guideAlpha;
+ private PageIndicator pageIndicator; private ViewGroup indicatorParent;
  private EdgeHandlePager pager;
  private int originalX;
  private final Runnable scan=new Runnable(){public void run(){
   if(mod==null||!mod.enabled()){remove();return;}
-  try{FrameLayout current=find(); if(current!=root){remove();if(current!=null)install(current);}position();hideGuide();}catch(Exception ignored){}
+  try{FrameLayout current=find(); if(current!=root){remove();if(current!=null)install(current);}position();hideGuide();updateIndicator();}catch(Exception ignored){}
   ui.postDelayed(this,250);
  }};
  @Override public void appLoaded(ModContext m,LoadedApp app){
@@ -61,6 +64,26 @@ public final class EdgeHandle extends ModEntry {
   if(candidate!=scrollGuide){if(scrollGuide!=null)scrollGuide.setAlpha(guideAlpha);scrollGuide=candidate;if(candidate!=null)guideAlpha=candidate.getAlpha();}
   if(scrollGuide!=null&&scrollGuide.getAlpha()!=0f)scrollGuide.setAlpha(0f);
  }
+ private void updateIndicator() throws Exception {
+  View panel=findWindow("com.mobis.splitscreen.right");
+  if(panel==null){removeIndicator();return;}
+  int mainId=panel.getResources().getIdentifier("main_view","id","com.mobis.splitscreen.right");
+  int sliderId=panel.getResources().getIdentifier("slidingView","id","com.mobis.splitscreen.right");
+  View main=mainId==0?null:panel.findViewById(mainId),slider=sliderId==0?null:panel.findViewById(sliderId);
+  if(!(main instanceof FrameLayout)||!(slider instanceof ViewGroup)||pager==null){removeIndicator();return;}
+  ViewGroup group=(ViewGroup)main;int[] page=pager.currentPage((ViewGroup)slider);int index=page==null?-1:page[0],count=page==null?0:page[1];
+  if(pageIndicator==null||indicatorParent!=group){removeIndicator();pageIndicator=new PageIndicator(group.getContext());pageIndicator.setClickable(false);pageIndicator.setFocusable(false);FrameLayout.LayoutParams p=new FrameLayout.LayoutParams(24,200,Gravity.LEFT|Gravity.CENTER_VERTICAL);p.leftMargin=23;group.addView(pageIndicator,p);indicatorParent=group;}
+  if(count<=0||index<0||index>=count){pageIndicator.setVisibility(View.GONE);return;}
+  boolean light=(group.getResources().getConfiguration().uiMode&Configuration.UI_MODE_NIGHT_MASK)!=Configuration.UI_MODE_NIGHT_YES;
+  pageIndicator.update(index,count,light);pageIndicator.setVisibility(View.VISIBLE);
+ }
+ private void removeIndicator(){if(pageIndicator!=null&&indicatorParent!=null)indicatorParent.removeView(pageIndicator);pageIndicator=null;indicatorParent=null;}
+ private static final class PageIndicator extends View {
+  private final Paint pen=new Paint(3);private int selected=-1,count;private boolean light;
+  PageIndicator(Context context){super(context);setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);}
+  void update(int index,int total,boolean day){if(selected!=index||count!=total||light!=day){selected=index;count=total;light=day;setContentDescription("위젯 "+(index+1)+" / "+total);invalidate();}}
+  protected void onDraw(Canvas c){super.onDraw(c);if(count<=0)return;float spacing=Math.min(14f,Math.max(6f,(getHeight()-8f)/Math.max(1,count-1)));float top=(getHeight()-spacing*(count-1))/2f;for(int i=0;i<count;i++){pen.setColor(i==selected?(light?0xff344247:0xfff2f5f6):(light?0x77606b70:0x778f9da2));c.drawCircle(getWidth()/2f,top+i*spacing,i==selected?4f:3.5f,pen);}}
+ }
  private void install(FrameLayout v){
   if(v.getChildCount()!=2||v.getWidth()!=80||v.getHeight()!=192||!(v.getChildAt(0) instanceof android.widget.ImageButton)||!(v.getChildAt(1) instanceof android.widget.ImageButton))return;
   root=v;first=v.getChildAt(0);second=v.getChildAt(1);firstAlpha=first.getAlpha();secondAlpha=second.getAlpha();
@@ -84,6 +107,7 @@ public final class EdgeHandle extends ModEntry {
   handle.setVisibility(View.VISIBLE);
  }
  private void remove(){
+  removeIndicator();
   if(scrollGuide!=null){scrollGuide.setAlpha(guideAlpha);scrollGuide=null;}
   if(root!=null){try{WindowManager.LayoutParams p=(WindowManager.LayoutParams)root.getLayoutParams();p.x=originalX;((WindowManager)root.getContext().getSystemService(Context.WINDOW_SERVICE)).updateViewLayout(root,p);}catch(RuntimeException ignored){}}
   if(root!=null&&handle!=null)root.removeView(handle);

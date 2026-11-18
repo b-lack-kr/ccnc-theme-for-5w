@@ -17,6 +17,7 @@ public final class BottomBarSurface implements NowPlayingSurface, PrototypeViewp
     private Long durationMs;
     private Boolean guidance;
     private final BottomBarHost host;
+    private final GuideOverlay guideOverlay;
     private boolean navigationScreenAllowed;
     private Boolean open;
     private byte[] pendingArt;
@@ -43,6 +44,7 @@ public final class BottomBarSurface implements NowPlayingSurface, PrototypeViewp
         this.host = bottomBarHost;
         bottomBarHost.setNavigationView(view);
         this.ui = handler;
+        this.guideOverlay = new GuideOverlay(activity, handler);
     }
 
     @Override // dev.ev6.nowplaying.NowPlayingSurface
@@ -64,6 +66,8 @@ public final class BottomBarSurface implements NowPlayingSurface, PrototypeViewp
         if (this.host.attach()) {
             Diagnostic.set("attach", "attached");
             this.attached = true;
+            this.guideOverlay.allow(this.navigationScreenAllowed && Boolean.FALSE.equals(this.open));
+            this.guideOverlay.start();
             this.host.setMetadata(this.title, this.artist, this.currentArt);
             this.host.setControls(this.controls);
             this.host.setPlaying(this.playing);
@@ -112,6 +116,7 @@ public final class BottomBarSurface implements NowPlayingSurface, PrototypeViewp
     @Override // dev.ev6.nowplaying.NowPlayingSurface
     public void detach() {
         this.wanted = false;
+        this.guideOverlay.stop();
         Runnable runnable = this.retry;
         if (runnable != null) {
             this.ui.removeCallbacks(runnable);
@@ -190,9 +195,9 @@ public final class BottomBarSurface implements NowPlayingSurface, PrototypeViewp
     }
 
     public void setProgressEnabled(boolean z) {
-        this.progressEnabled = z;
+        this.progressEnabled = true;
         if (this.attached) {
-            this.host.setProgressEnabled(z);
+            this.host.setProgressEnabled(true);
         }
     }
 
@@ -220,6 +225,7 @@ public final class BottomBarSurface implements NowPlayingSurface, PrototypeViewp
     public void setNavigationScreenAllowed(boolean z) {
         Diagnostic.set("screen", z ? "allowed" : "blocked");
         this.navigationScreenAllowed = z;
+        this.guideOverlay.allow(z && Boolean.FALSE.equals(this.open));
         if (this.attached) {
             this.host.setSideOpen(z ? this.open : null);
         }
@@ -233,6 +239,7 @@ public final class BottomBarSurface implements NowPlayingSurface, PrototypeViewp
         } else {
             this.open = null;
         }
+        this.guideOverlay.allow(this.navigationScreenAllowed && Boolean.FALSE.equals(this.open));
         updateGuidanceReserved();
         if (this.attached && !this.host.isAttached()) {
             BottomArtworkReceiver bottomArtworkReceiver = this.artwork;
@@ -241,6 +248,7 @@ public final class BottomBarSurface implements NowPlayingSurface, PrototypeViewp
                 this.artwork = null;
             }
             this.host.detach();
+            this.guideOverlay.stop();
             this.attached = false;
         }
         if (this.wanted && !this.attached && this.open != null && this.retry == null) {

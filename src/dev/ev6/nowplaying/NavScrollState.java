@@ -15,6 +15,8 @@ public final class NavScrollState {
 
     private static final Pattern GUIDE_LIST = Pattern.compile("^(\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d\\.\\d+)\\s+(\\d+)\\s+\\d+\\s+[VDIWEF]\\s+ExSL\\s*:.*CMapControl::isOverviewW: 55973\\].*checkOverviewWhileStop session\\(Front\\) activity\\(Mainview\\),.*isShowTBT\\(([01])\\),.*$");
 
+    private static final Pattern OFF_ROUTE = Pattern.compile("^(\\d\\d-\\d\\d \\d\\d:\\d\\d:\\d\\d\\.\\d+)\\s+(\\d+)\\s+\\d+\\s+[VDIWEF]\\s+ExSL\\s*:.*CMapControl::isOverviewW: 55973\\].*checkOverviewWhileStop session\\(Front\\) activity\\(Mainview\\),.*isOffRoute\\(([01])\\),.*$");
+
     public static Boolean parse(String str, int i, long j, long j2) {
         return parsePattern(LINE, str, i, j, j2);
     }
@@ -33,6 +35,8 @@ public final class NavScrollState {
     }
 
     public static Boolean guidance(String str, int i, long j, long j2) {
+        Boolean offRoute = parsePattern(OFF_ROUTE, str, i, j, j2);
+        if (offRoute != null) GuidanceProxy.setOffRoute(offRoute);
         Boolean list = parsePattern(GUIDE_LIST, str, i, j, j2);
         if (list != null) GuidanceProxy.setExpanded(list);
         Boolean pattern = parsePattern(GUIDE_CHANGE, str, i, j, j2);

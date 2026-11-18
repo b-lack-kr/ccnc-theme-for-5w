@@ -53,6 +53,8 @@ public final class BottomMediaView extends LinearLayout {
     private final Runnable openSettings = new Runnable(){public void run(){if(pointer!=-1&&!moved){longPressed=true;touchFeedback=false;invalidate();appSlot.showSettings();}}};
     private final Runnable guideListener = new Runnable() { public void run() { mediaHandler.post(new Runnable() { public void run() { if (guideButton != null) { guideButton.setVisibility(View.GONE);Diagnostic.set("guide","hidden"); } } }); } };
     private int currentMode = -999;
+    private Boolean avOff; private Object powerManager;
+    private String cachedTitle, cachedArtist; private Bitmap cachedArt;
     private String liveTitle, liveArtist;
     private long livePosition = -1, liveDuration = -1;
     private long artworkGeneration;
@@ -73,6 +75,7 @@ public final class BottomMediaView extends LinearLayout {
     }};
     private final Runnable mediaPoll = new Runnable() { public void run() {
         updateTheme();
+        updateAvOff();
         int mode = AndroidRealMode.read(getContext().getClassLoader());
         if (mode != currentMode) { currentMode = mode; setPlaying(null); clearLive(); requestStock(); }
         mediaHandler.postDelayed(this, 1000L);
@@ -197,7 +200,7 @@ public final class BottomMediaView extends LinearLayout {
         artwork.setBackgroundColor(light ? 0xffccd0d3 : -12893877);
         if(guideButton!=null)guideButton.invalidate();
         appSlot.refresh();
-        if(projectionFallback)showArtwork(null);
+        if(Boolean.TRUE.equals(avOff)) showOff(); else if(projectionFallback)showArtwork(null);
         invalidate();
     }
 
@@ -225,6 +228,7 @@ public final class BottomMediaView extends LinearLayout {
     }
 
     private void showArtwork(Bitmap bitmap) {
+        if (Boolean.TRUE.equals(avOff)) return;
         if(bitmap!=null){projectionFallback=false;Diagnostic.set("projection_art","artwork");artwork.setScaleType(ImageView.ScaleType.CENTER_CROP);artwork.setImageBitmap(bitmap);notice.artworkChanged();return;}
         projectionFallback=currentMode==115||currentMode==116;
         if(!projectionFallback){artwork.setScaleType(ImageView.ScaleType.CENTER_CROP);artwork.setImageDrawable(null);notice.artworkChanged();return;}
@@ -235,6 +239,37 @@ public final class BottomMediaView extends LinearLayout {
         artwork.setScaleType(ImageView.ScaleType.FIT_XY);
         artwork.setImageDrawable(icon);
         notice.artworkChanged();
+    }
+
+    private void updateAvOff() {
+        try {
+            if (powerManager == null) {
+                Class<?> c = Class.forName("com.hkmc.power.MicomPowerManager", false, getContext().getClassLoader());
+                powerManager = c.getConstructor(Context.class).newInstance(getContext());
+            }
+            Object result = powerManager.getClass().getMethod("isAvDisabled").invoke(powerManager);
+            if (!(result instanceof Boolean) || result.equals(avOff)) return;
+            avOff = (Boolean) result;
+            if (avOff.booleanValue()) showOff();
+            else { artist.setVisibility(View.VISIBLE); if(currentMode == 54) setMetadata(cachedTitle,cachedArtist,cachedArt); else { clearLive(); requestStock(); } }
+        } catch (Exception ignored) { } catch (LinkageError ignored) { }
+    }
+    private void showOff() {
+        artworkGeneration++; projectionFallback=false; artwork.setScaleType(ImageView.ScaleType.FIT_XY);
+        artwork.setImageDrawable(new OffIcon(Boolean.TRUE.equals(lightTheme)));
+        title.setText("Media Off"); artist.setText(""); artist.setVisibility(View.GONE);
+        progress=-1f; notice.reset(); invalidate();
+    }
+    private static final class OffIcon extends Drawable {
+        private final boolean light; private final Paint pen = new Paint(3);
+        OffIcon(boolean light){this.light=light;}
+        public void draw(Canvas c){android.graphics.Rect r=getBounds();float s=Math.min(r.width(),r.height());float x=r.exactCenterX(),y=r.exactCenterY();
+            pen.setStyle(Paint.Style.FILL);pen.setColor(light?0xffc7cdd0:0xff20272b);c.drawRect(r,pen);
+            pen.setColor(light?0xff485258:0xffe4edf1);pen.setStyle(Paint.Style.STROKE);pen.setStrokeWidth(Math.max(2,s*.035f));
+            c.drawRoundRect(new android.graphics.RectF(x-s*.23f,y-s*.25f,x+s*.23f,y+s*.25f),s*.035f,s*.035f,pen);
+            android.graphics.Path p=new android.graphics.Path();p.moveTo(x-s*.07f,y-s*.13f);p.lineTo(x+s*.13f,y);p.lineTo(x-s*.07f,y+s*.13f);p.close();c.drawPath(p,pen);pen.setStyle(Paint.Style.FILL);
+        }
+        public void setAlpha(int a){} public void setColorFilter(android.graphics.ColorFilter f){} public int getOpacity(){return android.graphics.PixelFormat.TRANSLUCENT;}
     }
 
     private static final class ProjectionFallback extends Drawable {
@@ -312,7 +347,8 @@ public final class BottomMediaView extends LinearLayout {
     }
 
     public void setMetadata(String str, String str2, Bitmap bitmap) {
-        if (currentMode != 54) return;
+        cachedTitle=str; cachedArtist=str2; cachedArt=bitmap;
+        if (currentMode != 54 || Boolean.TRUE.equals(avOff)) return;
         TextView textView = this.title;
         if (str == null || str.trim().isEmpty()) {
             str = "재생 정보 없음";
@@ -341,7 +377,7 @@ public final class BottomMediaView extends LinearLayout {
     }
 
     public void setProgress(Long l, Long l2) {
-        if (currentMode != 54) return;
+        if (currentMode != 54 || Boolean.TRUE.equals(avOff)) return;
         float f;
         if (l == null || l2 == null || l.longValue() < 0 || l2.longValue() <= 0 || l.longValue() > l2.longValue()) {
             f = -1.0f;
@@ -369,11 +405,11 @@ public final class BottomMediaView extends LinearLayout {
         boolean slotVisible=appSlot.getVisibility()==View.VISIBLE;
         float musicStart=slotVisible&&!appSlot.onRight()?appSlot.getRight():0f;
         float musicEnd=slotVisible&&appSlot.onRight()?appSlot.getLeft():getWidth();
-        float progressStart=textColumn.getLeft(),progressEnd=textColumn.getRight();
+        float progressStart=artwork.getRight(),progressEnd=musicEnd;
         if(this.progressEnabled && this.progress >= 0.0f && progressEnd>progressStart){
             this.progressPaint.setColor(Boolean.TRUE.equals(lightTheme)?0x663f484b:1728053247);
             canvas.drawRect(progressStart,0,progressEnd,3,this.progressPaint);
-            this.progressPaint.setColor(Boolean.TRUE.equals(lightTheme)?-10887960:0xffffe1a0);
+            this.progressPaint.setColor(Boolean.TRUE.equals(lightTheme)?-10887960:0xffffd99c);
             canvas.drawRect(progressStart,0,progressStart+(progressEnd-progressStart)*this.progress,3,this.progressPaint);
         }
         if(touchFeedback){this.progressPaint.setColor(Boolean.TRUE.equals(lightTheme)?0x26293438:0x40ffffff);canvas.drawRect(musicStart,0,musicEnd,getHeight(),this.progressPaint);}
@@ -425,7 +461,7 @@ public final class BottomMediaView extends LinearLayout {
         notice.reset();
         artworkGeneration++; pendingGenieArt=null; pendingGenieTitle=null; pendingRadioArt=null;liveRadioFrequency=Float.NaN;pendingRadioFrequency=Float.NaN;liveTitle = null; liveArtist = null; livePosition = -1; liveDuration = -1;
         showArtwork(null); progress = -1f; invalidate();
-        if (currentMode != 54) { title.setText("재생 정보 없음"); artist.setText(""); }
+        if (Boolean.TRUE.equals(avOff)) showOff(); else if (currentMode != 54) { title.setText("재생 정보 없음"); artist.setText(""); }
     }
     private void requestStock() {
         String pkg = currentMode == 2 || currentMode == 3 || currentMode == 4 ? "com.hkmc.av.app.radioge" : currentMode == 54 ? "com.daudio.av.app.btaudio.ui" : currentMode == 49 ? "com.daudio.av.app.usbmusic" : currentMode == 115 ? "com.daudio.app.dipo" : currentMode == 116 ? "com.google.android.projection.sink" : currentMode == 131 ? "com.daudio.app.musicstreaming" : null;
@@ -440,7 +476,7 @@ public final class BottomMediaView extends LinearLayout {
             || currentMode == 131 && "com.hkmc.genie_music.widgetupdate".equals(action);
     }
     private void receiveStock(Intent intent) {
-        if (intent == null || !accepts(intent.getAction())) return;
+        if (intent == null || Boolean.TRUE.equals(avOff) || !accepts(intent.getAction())) return;
         try {
             if (currentMode == 2 || currentMode == 3 || currentMode == 4) {
                 if (intent.hasExtra("frq_total")) { float f = intent.getFloatExtra("frq_total", 0); if(Float.isNaN(liveRadioFrequency)||Math.abs(liveRadioFrequency-f)>0.01f){artworkGeneration++;artwork.setImageDrawable(null);}liveRadioFrequency=f; String band = intent.getStringExtra("radio_mode"); liveTitle = (band == null ? "FM" : band) + " " + String.format(Locale.US, "%.1f", f);applyRadioArtwork(); }
