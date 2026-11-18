@@ -49,6 +49,10 @@ python3 tools/build.py --original /path/to/5W-NOWPLAYING-051-DIRECT-HOOK-EXPERIM
 
 빌드 시 원본 DEX의 SHA-256을 확인하고 테스트와 HMG-API 서명을 수행합니다. 바로가기 앱의 서명 키와 비밀번호는 최초 빌드 시 `local/`에 생성됩니다. 기존 설치를 업데이트하려면 이 파일들과 HMG-API 서명 키를 안전하게 보관해야 합니다.
 
+## 기여
+
+버그 수정과 개선을 위한 Pull Request를 환영합니다. 참여 방법은 [기여 안내](CONTRIBUTING.md)를 확인해 주세요.
+
 ## 라이선스
 
 Copyright © 2026 blackr. All rights reserved. 사용 조건은 [LICENSE](LICENSE)를 확인해 주세요.
