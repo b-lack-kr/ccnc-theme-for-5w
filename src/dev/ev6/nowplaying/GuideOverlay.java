@@ -40,7 +40,7 @@ final class GuideOverlay {
         int y=Boolean.TRUE.equals(state)?18:94;
         if(!added){try{WindowManager.LayoutParams p=new WindowManager.LayoutParams(48,48,2003,296,android.graphics.PixelFormat.TRANSLUCENT);p.gravity=Gravity.TOP|Gravity.LEFT;p.x=x;p.y=y;windows.addView(icon,p);added=true;shownX=x;shownY=y;}catch(RuntimeException e){return;}}
         else if(x!=shownX||y!=shownY){try{WindowManager.LayoutParams p=(WindowManager.LayoutParams)icon.getLayoutParams();p.x=x;p.y=y;windows.updateViewLayout(icon,p);shownX=x;shownY=y;}catch(RuntimeException ignored){}}
-        if(!state.equals(expanded)||mode!=theme){expanded=state;theme=mode;boolean light=mode!=Configuration.UI_MODE_NIGHT_YES;GradientDrawable bg=new GradientDrawable();bg.setColor(light?0xffe4e8ea:0xff303a42);bg.setCornerRadius(8);bg.setStroke(1,light?0xff79878d:0xff91a0a8);icon.setBackground(bg);icon.light=light;icon.expanded=state;icon.invalidate();}
+        if(!state.equals(expanded)||mode!=theme){expanded=state;theme=mode;boolean light=ThemeMode.isLight(mode);GradientDrawable bg=new GradientDrawable();bg.setColor(light?0xffe4e8ea:0xff303a42);bg.setCornerRadius(8);bg.setStroke(1,light?0xff79878d:0xff91a0a8);icon.setBackground(bg);icon.light=light;icon.expanded=state;icon.invalidate();}
     }
     private void remove(){if(added){try{windows.removeViewImmediate(icon);}catch(RuntimeException ignored){}added=false;}expanded=null;expected=null;shownX=-1;shownY=-1;theme=-1;}
     private void toggle(){View content=activity.findViewById(android.R.id.content);if(!allowed||!GuidanceProxy.displayable()||!activity.hasWindowFocus()||content==null||content.getHeight()!=720||(content.getWidth()!=1920&&content.getWidth()!=1280))return;

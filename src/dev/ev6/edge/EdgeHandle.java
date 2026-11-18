@@ -15,6 +15,7 @@ import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.view.Gravity;
 import android.content.res.Configuration;
+import dev.ev6.nowplaying.ThemeMode;
 import hmgapi.hook.LoadedApp;
 import hmgapi.hook.ModContext;
 import hmgapi.hook.ModEntry;
@@ -74,7 +75,7 @@ public final class EdgeHandle extends ModEntry {
   ViewGroup group=(ViewGroup)main;int[] page=pager.currentPage((ViewGroup)slider);int index=page==null?-1:page[0],count=page==null?0:page[1];
   if(pageIndicator==null||indicatorParent!=group){removeIndicator();pageIndicator=new PageIndicator(group.getContext());pageIndicator.setClickable(false);pageIndicator.setFocusable(false);FrameLayout.LayoutParams p=new FrameLayout.LayoutParams(24,200,Gravity.LEFT|Gravity.CENTER_VERTICAL);p.leftMargin=23;group.addView(pageIndicator,p);indicatorParent=group;}
   if(count<=0||index<0||index>=count){pageIndicator.setVisibility(View.GONE);return;}
-  boolean light=(group.getResources().getConfiguration().uiMode&Configuration.UI_MODE_NIGHT_MASK)!=Configuration.UI_MODE_NIGHT_YES;
+  boolean light=ThemeMode.isLight(group.getResources().getConfiguration().uiMode);
   pageIndicator.update(index,count,light);pageIndicator.setVisibility(View.VISIBLE);
  }
  private void removeIndicator(){if(pageIndicator!=null&&indicatorParent!=null)indicatorParent.removeView(pageIndicator);pageIndicator=null;indicatorParent=null;}

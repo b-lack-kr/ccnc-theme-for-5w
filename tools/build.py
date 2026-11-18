@@ -16,7 +16,7 @@ TOOLS = WORKSPACE / ".tools"
 EXPECTED_ORIGINAL = "5be94836a030ce6e291d200626252aac53cdd496ce1b3d6d7636566664cee6fc"
 PREFIXES = ("AppSlot", "NavKeySwap", "Diagnostic", "RadioArtBridge", "PrototypeViewport", "BottomMediaView",
             "BtCommandGate", "StockBtControlBridge", "BottomBarLayout", "BottomBarSurface",
-            "GuidanceProxy", "GuideOverlay", "OsdModePolicy", "NavScrollMonitor", "UniversalEntry", "TransientNotice")
+            "GuidanceProxy", "GuideOverlay", "OsdModePolicy", "ThemeMode", "NavScrollMonitor", "UniversalEntry", "TransientNotice")
 EXACT = {"NowPlayingController.class", "NavScrollState.class", "MarqueeTiming.class"}
 
 
@@ -56,7 +56,7 @@ def main():
     tests = sorted((ROOT / "tests").glob("*.java"))
     run([javac, "-source", "8", "-target", "8", "-cp", args.android_jar, "-d", classes, *sources, *tests])
     for test in ("dev.ev6.nowplaying.StateTest", "dev.ev6.nowplaying.LayoutTest",
-                 "dev.ev6.nowplaying.MarqueeTimingTest", "dev.ev6.edge.EdgePageMappingTest", "GestureTest", "GateTest"):
+                 "dev.ev6.nowplaying.MarqueeTimingTest", "dev.ev6.nowplaying.ThemeModeTest", "dev.ev6.edge.EdgePageMappingTest", "GestureTest", "GateTest"):
         run([java, "-cp", classes, test])
     package_classes = classes / "dev/ev6/nowplaying"
     replacements = [p for p in sorted(package_classes.glob("*.class"))

@@ -190,7 +190,7 @@ public final class BottomMediaView extends LinearLayout {
 
     private void updateTheme() {
         int mode=getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
-        boolean light=mode != Configuration.UI_MODE_NIGHT_YES;
+        boolean light=ThemeMode.isLight(mode);
         if(lightTheme!=null && lightTheme.booleanValue()==light)return;
         lightTheme=Boolean.valueOf(light);
         Diagnostic.set("theme",light ? "light" : "dark");
