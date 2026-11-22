@@ -5,8 +5,8 @@
       "key": "navi_swap_enabled",
       "type": "toggle",
       "default": true,
-      "title": "NAV 버튼 반전 및 음성 검색 (시험용)",
-      "description": "차량에서 입력 반전과 음성 검색을 검증한 뒤에만 켜세요.",
+      "title": "NAV 버튼 반전 및 음성 검색",
+      "description": "NAV를 짧게 누르면 통합검색과 음성인식이 시작되고, 길게 누르면 검색·경로가 열립니다.",
       "apply": "live"
     }
   ]

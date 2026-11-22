@@ -1,4 +1,4 @@
-package dev.ev6.nowplaying;
+package dev.ev6.ccnc_media;
 public class LayoutTest {
  static void check(boolean condition){if(!condition)throw new AssertionError();}
  public static void main(String[] a) {

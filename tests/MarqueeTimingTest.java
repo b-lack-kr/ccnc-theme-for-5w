@@ -1,4 +1,4 @@
-package dev.ev6.nowplaying;
+package dev.ev6.ccnc_media;
 public final class MarqueeTimingTest {
  public static void main(String[] args){float d=90,speed=30;
   check(MarqueeTiming.offset(0,d,speed)==0);

@@ -15,7 +15,7 @@ import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.view.Gravity;
 import android.content.res.Configuration;
-import dev.ev6.nowplaying.ThemeMode;
+import dev.ev6.ccnc_media.ThemeMode;
 import hmgapi.hook.LoadedApp;
 import hmgapi.hook.ModContext;
 import hmgapi.hook.ModEntry;

@@ -1,5 +1,5 @@
-import dev.ev6.nowplaying.BtCommandGate;
-import dev.ev6.nowplaying.StockBtControlBridge;
+import dev.ev6.ccnc_media.BtCommandGate;
+import dev.ev6.ccnc_media.StockBtControlBridge;
 public final class GateTest {
  public static void main(String[] args) {
   final int[] calls={0};

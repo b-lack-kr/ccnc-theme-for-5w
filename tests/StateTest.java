@@ -1,4 +1,4 @@
-package dev.ev6.nowplaying;
+package dev.ev6.ccnc_media;
 import java.text.SimpleDateFormat;import java.util.*;
 public final class StateTest {
  public static void main(String[] args) {

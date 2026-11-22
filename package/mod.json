@@ -1,8 +1,8 @@
 {
   "id": "blackr-ccnc-theme-for-5w",
   "name": "ccNC Theme for 5W",
-  "version": "0.1.31",
-  "description": "blackr's experimental 5W theme: media information and right-side handle.",
+  "version": "0.1.45",
+  "description": "5W 내비게이션의 미디어 정보, 음량 표시 및 오른쪽 분할 화면을 구성하는 테마입니다.",
   "authors": ["blackr"],
   "live": true,
   "apps": [{"apk": "app/Shortcuts.apk", "package": "dev.blackr.ccnc.shortcuts"}],
@@ -12,7 +12,7 @@
   ],
   "hooks": {
     "jar": "hooks.jar",
-    "entry": "dev.ev6.nowplaying.UniversalEntry",
+    "entry": "dev.ev6.ccnc_media.UniversalEntry",
     "points": {}
   }
 }

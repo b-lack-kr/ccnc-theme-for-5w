@@ -1,0 +1,1 @@
+package dev.ev6.ccnc_media; import android.content.Context; import android.os.Handler; import android.graphics.Bitmap; public final class BottomArtworkReceiver { public BottomArtworkReceiver(Context c, Handler h, ArtworkPipeline.Sink<Bitmap> s){} public void start(){} public void close(){} public void setTrack(String a,String b){} public void submitVerified(byte[] b){} }

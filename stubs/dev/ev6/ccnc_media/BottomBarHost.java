@@ -1,0 +1,3 @@
+package dev.ev6.ccnc_media;
+import android.app.Activity; import android.view.View; import android.graphics.Bitmap;
+public final class BottomBarHost { public BottomBarHost(Activity a){} public void setNavigationView(View v){} public boolean attach(){return false;} public boolean isAttached(){return false;} public void detach(){} public void setMetadata(String a,String b,Bitmap c){} public void setControls(BottomMediaView.Controls c){} public void setPlaying(Boolean b){} public void setProgress(Long a,Long b){} public void setProgressEnabled(boolean b){} public void setSideOpen(Boolean b){} public void setNavigationReserved(BarPlacement.Box b){} }

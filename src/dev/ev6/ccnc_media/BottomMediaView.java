@@ -1,0 +1,693 @@
+package dev.ev6.ccnc_media;
+
+import android.app.Activity;
+import android.content.Context;
+import android.content.BroadcastReceiver;
+import android.content.Intent;
+import android.content.IntentFilter;
+import android.content.res.Configuration;
+import android.graphics.BitmapFactory;
+import android.os.Handler;
+import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.Drawable;
+import android.text.TextUtils;
+import android.text.Layout;
+import android.text.StaticLayout;
+import android.view.View;
+import android.view.MotionEvent;
+import android.view.ViewConfiguration;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+
+/* JADX INFO: loaded from: classes.dex */
+public final class BottomMediaView extends LinearLayout {
+    private final TextView artist;
+    private final ImageView artwork;
+    private final LinearLayout textColumn;
+    private final CarPlayBadge sourceBadge;
+    private Controls controls;
+    private final TransportIcon next;
+    private final TransportIcon play;
+    private Boolean playing;
+    private final TransportIcon previous;
+    private float progress;
+    private boolean progressEnabled;
+    private final Paint progressPaint;
+    private final TextView title;
+    private final Handler mediaHandler = new Handler();
+    private final TransientNotice notice=new TransientNotice(this,mediaHandler);
+    private Boolean lightTheme;
+    private boolean projectionFallback;
+    private boolean touchFeedback;
+    private final Runnable clearTouchFeedback=new Runnable(){public void run(){touchFeedback=false;invalidate();}};
+    private View guideButton;
+    private final AppSlot appSlot;
+    private boolean longPressed;
+    private final Runnable openSettings = new Runnable(){public void run(){if(pointer!=-1&&!moved){longPressed=true;touchFeedback=false;invalidate();appSlot.showSettings();}}};
+    private final Runnable guideListener = new Runnable() { public void run() { mediaHandler.post(new Runnable() { public void run() { if (guideButton != null) { guideButton.setVisibility(View.GONE);Diagnostic.set("guide","hidden"); } } }); } };
+    private int currentMode = -999;
+    private Boolean avOff; private Object powerManager;
+    private String cachedTitle, cachedArtist; private Bitmap cachedArt;
+    private String liveTitle, liveArtist;
+    private long livePosition = -1, liveDuration = -1;
+    private long artworkGeneration;
+    private ExecutorService artExecutor;
+    private boolean registered;
+    private boolean artReceiverRegistered;
+    private byte[] pendingGenieArt; private String pendingGenieTitle;
+    private byte[] pendingRadioArt; private float pendingRadioFrequency=Float.NaN,liveRadioFrequency=Float.NaN;
+    private final BroadcastReceiver genieArtReceiver = new BroadcastReceiver() { public void onReceive(Context c,Intent i) {
+        if(i!=null && "dev.ev6.ccnc_media.RADIO_ART".equals(i.getAction())){
+            Diagnostic.set("radio_receive","called");
+            if(currentMode!=2&&currentMode!=3&&currentMode!=4)return;
+            try{byte[] image=i.getByteArrayExtra("image");float frequency=i.getFloatExtra("frequency",Float.NaN);if(i.getIntExtra("mode",-1)!=currentMode||image==null||image.length==0||image.length>524288||Float.isNaN(frequency))return;pendingRadioArt=image;pendingRadioFrequency=frequency;applyRadioArtwork();}catch(RuntimeException ignored){}return;
+        }
+        Diagnostic.set("art_receive", currentMode == 131 ? "genie" : "other_mode");
+        if(currentMode!=131 || i==null || !"dev.ev6.ccnc_media.GENIE_ART".equals(i.getAction()))return;
+        try {String name=i.getStringExtra("title");byte[] image=i.getByteArrayExtra("image");if(name==null||name.length()>256||image==null||image.length==0||image.length>524288)return;pendingGenieTitle=name;pendingGenieArt=image;applyGenieArtwork();}catch(RuntimeException ignored){}
+    }};
+    private final Runnable mediaPoll = new Runnable() { public void run() {
+        updateTheme();
+        updateAvOff();
+        int mode = AndroidRealMode.read(getContext().getClassLoader());
+        if (mode != currentMode) { currentMode = mode; setPlaying(null); clearLive(); requestStock(); }
+        mediaHandler.postDelayed(this, 1000L);
+    }};
+    private final Runnable projectionArtworkRefresh = new Runnable() { public void run() { if (registered && (currentMode == 115 || currentMode == 116) && !Boolean.TRUE.equals(avOff)) requestStock(); } };
+    private final BroadcastReceiver mediaReceiver = new BroadcastReceiver() { public void onReceive(Context c, Intent intent) { receiveStock(intent); } };
+    private float downX, downY;
+    private long downTime;
+    private boolean moved;
+    private int pointer = -1;
+    private int publishedArtworkLeft = -1;
+    private int publishedScreenWidth = -1;
+
+    @Override protected void onLayout(boolean changed, int l, int t, int r, int b) {
+        super.onLayout(changed, l, t, r, b);
+        if (artwork == null || artwork.getWidth() <= 0) return;
+        int[] loc = new int[2]; artwork.getLocationOnScreen(loc);
+        android.util.DisplayMetrics metrics = new android.util.DisplayMetrics();
+        android.view.WindowManager wm = (android.view.WindowManager)getContext().getSystemService(Context.WINDOW_SERVICE);
+        if (wm == null) return;
+        wm.getDefaultDisplay().getRealMetrics(metrics);
+        if (loc[0] == publishedArtworkLeft && metrics.widthPixels == publishedScreenWidth) return;
+        android.content.SharedPreferences shared = AppSlot.swipePrefs(getContext());
+        if (shared != null && loc[0] > metrics.widthPixels / 2 && loc[0] < metrics.widthPixels) {
+            shared.edit().putInt("art_left", loc[0]).putInt("screen_width", metrics.widthPixels).apply();
+            publishedArtworkLeft = loc[0]; publishedScreenWidth = metrics.widthPixels;
+        }
+    }
+
+    public interface Controls {
+        void next();
+
+        void playPause();
+
+        void previous();
+    }
+
+    public BottomMediaView(Context context) {
+        super(context);
+        this.progressPaint = new Paint();
+        this.progress = -1.0f;
+        this.progressEnabled = true;
+        setOrientation(0);
+        setGravity(16);
+        setPadding(0, 0, 0, 0);
+        GradientDrawable gradientDrawable = new GradientDrawable();
+        gradientDrawable.setColor(0xff333537);
+        setBackground(gradientDrawable);
+        guideButton = new View(context) {
+            private final Paint pen = new Paint(3);
+            protected void onDraw(Canvas canvas) {
+                super.onDraw(canvas); float cx=getWidth()/2f, cy=getHeight()/2f;
+                pen.setColor(Boolean.TRUE.equals(lightTheme) ? 0xff3b4549 : 0xffd3d9de); pen.setStrokeWidth(3f); pen.setStyle(Paint.Style.STROKE);
+                canvas.drawRect(cx-39,cy-20,cx+39,cy+20,pen);
+                canvas.drawLine(cx+5,cy-20,cx+5,cy+20,pen);
+                canvas.drawLine(cx+10,cy-10,cx+32,cy-10,pen); canvas.drawLine(cx+10,cy,cx+32,cy,pen); canvas.drawLine(cx+10,cy+10,cx+32,cy+10,pen);
+                pen.setStyle(Paint.Style.FILL); Boolean expanded=GuidanceProxy.expanded();
+                if (expanded != null) { android.graphics.Path arrow=new android.graphics.Path();
+                    if (expanded.booleanValue()) { arrow.moveTo(cx-29,cy-6); arrow.lineTo(cx-13,cy-6); arrow.lineTo(cx-13,cy-14); arrow.lineTo(cx+1,cy); arrow.lineTo(cx-13,cy+14); arrow.lineTo(cx-13,cy+6); arrow.lineTo(cx-29,cy+6); }
+                    else { arrow.moveTo(cx+1,cy-6); arrow.lineTo(cx-15,cy-6); arrow.lineTo(cx-15,cy-14); arrow.lineTo(cx-29,cy); arrow.lineTo(cx-15,cy+14); arrow.lineTo(cx-15,cy+6); arrow.lineTo(cx+1,cy+6); }
+                    arrow.close(); canvas.drawPath(arrow,pen);
+                }
+            }
+        };
+        guideButton.setContentDescription("길안내 목록 열기 또는 접기");
+        guideButton.setVisibility(View.GONE);
+        guideButton.setOnTouchListener(new View.OnTouchListener(){public boolean onTouch(View v,MotionEvent e){int action=e.getActionMasked();if(action==MotionEvent.ACTION_DOWN){v.animate().cancel();v.animate().scaleX(0.94f).scaleY(0.94f).setDuration(80).start();}else if(action==MotionEvent.ACTION_UP||action==MotionEvent.ACTION_CANCEL){v.animate().cancel();v.animate().scaleX(1f).scaleY(1f).setDuration(120).start();}return false;}});
+        guideButton.setOnClickListener(new View.OnClickListener(){ public void onClick(View v){ toggleStockGuidance(); }});
+        addView(guideButton,new LinearLayout.LayoutParams(125,-1));
+        appSlot=new AppSlot(context);
+        appSlot.setMediaAction(new Runnable(){public void run(){new StockBtControlBridge().togglePlayback();}});
+        addView(appSlot,new LinearLayout.LayoutParams(125,-1));
+        ImageView imageView = new ImageView(context);
+        this.artwork = imageView;
+        notice.setArtworkSource(imageView);
+        imageView.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        // Fill the artwork slot without a visible gap at its top or left edge.
+        imageView.setPadding(0, 0, 0, 0);
+        imageView.setBackgroundColor(0xff333537);
+        imageView.setContentDescription("앨범아트");
+        addView(imageView, new LinearLayout.LayoutParams(85, -1));
+        sourceBadge = CarPlayBadge.addTo(this, false);
+        sourceBadge.setVisibility(View.GONE);
+        LinearLayout linearLayout = new LinearLayout(context);
+        this.textColumn = linearLayout;
+        linearLayout.setOrientation(1);
+        linearLayout.setGravity(16);
+        LinearLayout.LayoutParams layoutParams = new LinearLayout.LayoutParams(0, -1, 1.0f);
+        layoutParams.leftMargin = dp(6);
+        layoutParams.rightMargin = dp(4);
+        addView(linearLayout, layoutParams);
+        appSlot.setPlacementChanged(new Runnable(){public void run(){placeAppSlot();}});
+        placeAppSlot();
+        TextView textViewText = text(19, -1, Typeface.NORMAL);
+        this.title = textViewText;
+        TextView textViewText2 = text(16, -1906708, Typeface.NORMAL);
+        this.artist = textViewText2;
+        linearLayout.addView(textViewText, new LinearLayout.LayoutParams(-1, -2));
+        linearLayout.addView(textViewText2, new LinearLayout.LayoutParams(-1, -2));
+        TransportIcon transportIconButton = button(0, "이전 곡");
+        this.previous = transportIconButton;
+        TransportIcon transportIconButton2 = button(4, "재생 또는 일시정지");
+        this.play = transportIconButton2;
+        TransportIcon transportIconButton3 = button(3, "다음 곡");
+        this.next = transportIconButton3;
+        transportIconButton.setOnClickListener(new View.OnClickListener() { // from class: dev.ev6.ccnc_media.BottomMediaView.1
+            @Override // android.view.View.OnClickListener
+            public void onClick(View view) {
+                if (BottomMediaView.this.controls != null) {
+                    BottomMediaView.this.controls.previous();
+                }
+            }
+        });
+        transportIconButton2.setOnClickListener(new View.OnClickListener() { // from class: dev.ev6.ccnc_media.BottomMediaView.2
+            @Override // android.view.View.OnClickListener
+            public void onClick(View view) {
+                if (BottomMediaView.this.controls != null) {
+                    BottomMediaView.this.controls.playPause();
+                }
+            }
+        });
+        transportIconButton3.setOnClickListener(new View.OnClickListener() { // from class: dev.ev6.ccnc_media.BottomMediaView.3
+            @Override // android.view.View.OnClickListener
+            public void onClick(View view) {
+                if (BottomMediaView.this.controls != null) {
+                    BottomMediaView.this.controls.next();
+                }
+            }
+        });
+        setMetadata(null, null, null);
+        setControls(null);
+        setPlaying(null);
+        updateTheme();
+    }
+
+    private void updateTheme() {
+        int mode=getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+        boolean light=ThemeMode.isLight(mode);
+        if(lightTheme!=null && lightTheme.booleanValue()==light)return;
+        lightTheme=Boolean.valueOf(light);
+        Diagnostic.set("theme",light ? "light" : "dark");
+        setBackgroundColor(light ? 0xffe4e6e8 : 0xff333537);
+        sourceBadge.setLight(light);
+        title.setTextColor(light ? 0xff30383b : 0xffffffff);
+        artist.setTextColor(light ? 0xff5c6568 : 0xffe2e7ec);
+        artwork.setBackgroundColor(light ? 0xffccd0d3 : 0xff333537);
+        if(guideButton!=null)guideButton.invalidate();
+        appSlot.refresh();
+        if(Boolean.TRUE.equals(avOff)) showOff(); else if(projectionFallback)showArtwork(null);
+        invalidate();
+    }
+
+    private void placeAppSlot(){
+        if(appSlot.getParent()!=this)return;
+        removeView(appSlot);
+        int position=appSlot.onRight()?getChildCount():indexOfChild(artwork);
+        addView(appSlot,Math.max(0,position),new LinearLayout.LayoutParams(125,-1));
+        resizeBar();
+        invalidate();
+    }
+
+    private void resizeBar(){
+        android.view.ViewGroup.LayoutParams p=getLayoutParams();
+        int width=appSlot.isNone()?515:640;
+        if(p==null||p.width<=1||p.width==width)return;
+        if(p instanceof android.view.WindowManager.LayoutParams){
+            android.view.WindowManager.LayoutParams w=(android.view.WindowManager.LayoutParams)p;
+            int right=w.x+w.width;w.x=right-width;w.width=width;
+            try{((android.view.WindowManager)getContext().getSystemService(Context.WINDOW_SERVICE)).updateViewLayout(this,w);}catch(RuntimeException ignored){}
+        }else if(p instanceof android.widget.FrameLayout.LayoutParams){
+            android.widget.FrameLayout.LayoutParams f=(android.widget.FrameLayout.LayoutParams)p;
+            int right=f.leftMargin+f.width;f.leftMargin=right-width;f.width=width;setLayoutParams(f);
+        }
+    }
+
+    private void showArtwork(Bitmap bitmap) {
+        if (Boolean.TRUE.equals(avOff)) return;
+        if(bitmap!=null){projectionFallback=false;Diagnostic.set("projection_art","artwork");artwork.setScaleType(ImageView.ScaleType.CENTER_CROP);artwork.setImageBitmap(bitmap);notice.artworkChanged();return;}
+        projectionFallback=currentMode==115||currentMode==116;
+        if(!projectionFallback){artwork.setScaleType(ImageView.ScaleType.CENTER_CROP);artwork.setImageDrawable(null);notice.artworkChanged();return;}
+        Drawable icon=null;String pkg=currentMode==115?"com.daudio.app.dipo":"com.google.android.projection.sink";
+        if(currentMode!=115)try{android.content.pm.PackageManager pm=getContext().getPackageManager();android.content.pm.ApplicationInfo info=pm.getApplicationInfo(pkg,0);if(info.icon!=0)icon=pm.getApplicationIcon(info);}catch(android.content.pm.PackageManager.NameNotFoundException ignored){}catch(RuntimeException ignored){}
+        Diagnostic.set("projection_art",icon==null?(currentMode==115?"carplay_label":"auto_label"):(currentMode==115?"carplay_icon":"auto_icon"));
+        if(icon==null&&currentMode==115){
+            byte[] image=android.util.Base64.decode(CarPlayPlaceholder.DATA,android.util.Base64.DEFAULT);
+            Bitmap placeholder=BitmapFactory.decodeByteArray(image,0,image.length);
+            if(placeholder!=null)icon=new android.graphics.drawable.BitmapDrawable(getResources(),placeholder);
+        }
+        if(icon==null)icon=new ProjectionFallback(currentMode==115,Boolean.TRUE.equals(lightTheme));
+        artwork.setScaleType(ImageView.ScaleType.FIT_XY);
+        artwork.setImageDrawable(icon);
+        notice.artworkChanged();
+    }
+
+    private void updateAvOff() {
+        try {
+            if (powerManager == null) {
+                Class<?> c = Class.forName("com.hkmc.power.MicomPowerManager", false, getContext().getClassLoader());
+                powerManager = c.getConstructor(Context.class).newInstance(getContext());
+            }
+            Object result = powerManager.getClass().getMethod("isAvDisabled").invoke(powerManager);
+            if (!(result instanceof Boolean) || result.equals(avOff)) return;
+            avOff = (Boolean) result;
+            if (avOff.booleanValue()) showOff();
+            else { artist.setVisibility(View.VISIBLE); if(currentMode == 54) setMetadata(cachedTitle,cachedArtist,cachedArt); else { clearLive(); requestStock(); } }
+        } catch (Exception ignored) { } catch (LinkageError ignored) { }
+    }
+    private void showOff() {
+        sourceBadge.setVisibility(View.GONE);
+        artworkGeneration++; projectionFallback=false; artwork.setScaleType(ImageView.ScaleType.FIT_XY);
+        artwork.setImageDrawable(new OffIcon(Boolean.TRUE.equals(lightTheme)));
+        title.setText("Media Off"); artist.setText(""); artist.setVisibility(View.GONE);
+        progress=-1f; notice.reset(); invalidate();
+    }
+    /** CarPlay source mark between the cover and both lines of text on ccNC. */
+    static final class CarPlayBadge extends View {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final android.graphics.RectF arc = new android.graphics.RectF(-.45f, -.45f, .45f, .45f);
+        private final android.graphics.Path triangle = new android.graphics.Path();
+        private int tint;
+
+        private CarPlayBadge(Context context, boolean light) {
+            super(context);
+            triangle.moveTo(-.115f, -.22f);
+            triangle.lineTo(.24f, 0);
+            triangle.lineTo(-.115f, .22f);
+            triangle.close();
+            setContentDescription("Apple CarPlay");
+            setLight(light);
+        }
+
+        static CarPlayBadge addTo(LinearLayout row, boolean light) {
+            CarPlayBadge badge = new CarPlayBadge(row.getContext(), light);
+            row.addView(badge, new LinearLayout.LayoutParams(66, -1));
+            return badge;
+        }
+
+        void setLight(boolean light) {
+            tint = light ? 0xff394348 : 0xffe2e7ec;
+            invalidate();
+        }
+
+        static String title(String text) {
+            if (text == null || text.trim().isEmpty()) return "타이틀 정보 없음";
+            String value = text.trim();
+            if (value.equals("Apple CarPlay 실행 중...")
+                    || value.equals("Apple CarPlay 실행 중…")
+                    || value.equals("Apple CarPlay 실행 중")) return "타이틀 정보 없음";
+            return text;
+        }
+
+        static String artist(String text) {
+            return text == null || text.trim().isEmpty() ? "아티스트 정보 없음" : text;
+        }
+
+        @Override protected void onDraw(Canvas canvas) {
+            float size = Math.min(getWidth() * .70f, getHeight() * .56f);
+            int save = canvas.save();
+            canvas.translate(getWidth() * .59f, getHeight() * .5f);
+            canvas.scale(size, size);
+            paint.setColor(tint);
+            paint.setStyle(Paint.Style.STROKE);
+            paint.setStrokeWidth(.095f);
+            canvas.drawArc(arc, 27f, 306f, false, paint);
+            paint.setStyle(Paint.Style.FILL);
+            canvas.drawPath(triangle, paint);
+            canvas.restoreToCount(save);
+        }
+    }
+
+    private static final class OffIcon extends Drawable {
+        private final boolean light; private final Paint pen = new Paint(3);
+        OffIcon(boolean light){this.light=light;}
+        public void draw(Canvas c){android.graphics.Rect r=getBounds();float s=Math.min(r.width(),r.height());float x=r.exactCenterX(),y=r.exactCenterY();
+            pen.setStyle(Paint.Style.FILL);pen.setColor(light?0xffc7cdd0:0xff20272b);c.drawRect(r,pen);
+            pen.setColor(light?0xff485258:0xffe4edf1);pen.setStyle(Paint.Style.STROKE);pen.setStrokeWidth(Math.max(2,s*.035f));
+            c.drawRoundRect(new android.graphics.RectF(x-s*.23f,y-s*.25f,x+s*.23f,y+s*.25f),s*.035f,s*.035f,pen);
+            android.graphics.Path p=new android.graphics.Path();p.moveTo(x-s*.07f,y-s*.13f);p.lineTo(x+s*.13f,y);p.lineTo(x-s*.07f,y+s*.13f);p.close();c.drawPath(p,pen);pen.setStyle(Paint.Style.FILL);
+        }
+        public void setAlpha(int a){} public void setColorFilter(android.graphics.ColorFilter f){} public int getOpacity(){return android.graphics.PixelFormat.TRANSLUCENT;}
+    }
+
+    private static final class ProjectionFallback extends Drawable {
+        private final boolean carPlay,light;private final Paint paint=new Paint(3);
+        ProjectionFallback(boolean carPlay,boolean light){this.carPlay=carPlay;this.light=light;}
+        @Override public void draw(Canvas canvas){
+            android.graphics.Rect r=getBounds();float s=Math.min(r.width(),r.height());float x=r.exactCenterX(),top=r.top+(r.height()-s)/2f;
+            int foreground=light?0xff37454b:0xffeef4f6;paint.setColor(foreground);paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(s*0.045f);paint.setStrokeCap(Paint.Cap.ROUND);paint.setStrokeJoin(Paint.Join.ROUND);
+            if(carPlay){
+                paint.setStyle(Paint.Style.FILL);paint.setColor(light?0xffcbd1d4:0xff444a50);
+                canvas.drawRect(r,paint);
+                paint.setColor(light?0xff66747a:0xffc6d0d5);paint.setStyle(Paint.Style.STROKE);paint.setStrokeWidth(s*0.055f);
+                canvas.drawLine(x+s*0.12f,top+s*0.24f,x+s*0.12f,top+s*0.65f,paint);
+                canvas.drawLine(x+s*0.12f,top+s*0.24f,x+s*0.25f,top+s*0.20f,paint);
+                paint.setStyle(Paint.Style.FILL);
+                canvas.drawOval(new android.graphics.RectF(x-s*0.05f,top+s*0.60f,x+s*0.14f,top+s*0.72f),paint);
+            }else{
+                paint.setColor(0xff45a9ed);paint.setStrokeWidth(s*0.09f);canvas.drawLine(x-s*0.21f,top+s*0.53f,x,top+s*0.14f,paint);canvas.drawLine(x,top+s*0.14f,x+s*0.21f,top+s*0.53f,paint);
+                paint.setColor(foreground);paint.setStyle(Paint.Style.FILL);paint.setTextAlign(Paint.Align.CENTER);paint.setTypeface(Typeface.create(Typeface.DEFAULT,Typeface.BOLD));paint.setTextSize(s*0.145f);canvas.drawText("Android Auto",x,top+s*0.82f,paint);
+            }
+        }
+        @Override public void setAlpha(int alpha){paint.setAlpha(alpha);}
+        @Override public void setColorFilter(android.graphics.ColorFilter filter){paint.setColorFilter(filter);}
+        @Override public int getOpacity(){return android.graphics.PixelFormat.TRANSLUCENT;}
+        @Override public int getIntrinsicWidth(){return 80;}
+        @Override public int getIntrinsicHeight(){return 80;}
+    }
+
+    @Override protected void onConfigurationChanged(Configuration configuration) {
+        super.onConfigurationChanged(configuration);
+        updateTheme();
+    }
+
+    private TextView text(int i, int i2, int i3) {
+        TextView textView = new MarqueeTextView(getContext());
+        textView.setTextSize(i);
+        textView.setTextColor(i2);
+        textView.setTypeface(Typeface.create("devicedefault", i3));
+        textView.setSingleLine(true);
+        textView.setEllipsize(null);
+        return textView;
+    }
+
+    private static final class MarqueeTextView extends TextView {
+        private String cachedText;
+        private int cachedWidth=-1;
+        private float cachedTextSize=-1;
+        private Typeface cachedTypeface;
+        private StaticLayout line;
+        private float contentWidth;
+        private long started;
+        MarqueeTextView(Context context){super(context);}
+        @Override protected void onDraw(Canvas canvas){
+            String value=getText()==null?"":getText().toString().replace('\n',' ').replace('\r',' ');
+            int width=getWidth();if(width<=0)return;
+            if(line==null||!value.equals(cachedText)||cachedWidth!=width||cachedTextSize!=getTextSize()||cachedTypeface!=getTypeface()){
+                cachedText=value;cachedWidth=width;cachedTextSize=getTextSize();cachedTypeface=getTypeface();
+                contentWidth=Layout.getDesiredWidth(value,getPaint());
+                int layoutWidth=Math.max(width,Math.max(1,(int)Math.ceil(contentWidth)));
+                line=new StaticLayout(value,getPaint(),layoutWidth,Layout.Alignment.ALIGN_NORMAL,1f,0f,false);
+                started=android.os.SystemClock.uptimeMillis();
+            }
+            getPaint().setColor(getCurrentTextColor());
+            float overflow=Math.max(0f,contentWidth-width),offset=0f;
+            if(overflow>0.5f){float speed=20f*getResources().getDisplayMetrics().density;long elapsed=android.os.SystemClock.uptimeMillis()-started;long travel=MarqueeTiming.travelMs(overflow,speed);long phase=elapsed%(MarqueeTiming.START_PAUSE_MS+travel+MarqueeTiming.END_PAUSE_MS);offset=MarqueeTiming.offset(elapsed,overflow,speed);boolean paused=phase<MarqueeTiming.START_PAUSE_MS||phase>=MarqueeTiming.START_PAUSE_MS+travel;if(isShown())postInvalidateDelayed(paused?100L:33L);}
+            int save=canvas.save();canvas.clipRect(0,0,width,getHeight());canvas.translate(-offset,Math.max(0,(getHeight()-line.getHeight())/2f));line.draw(canvas);canvas.restoreToCount(save);
+        }
+    }
+
+    private TransportIcon button(int i, String str) {
+        TransportIcon transportIcon = new TransportIcon(getContext(), i);
+        transportIcon.setContentDescription(str);
+
+        return transportIcon;
+    }
+
+    public void setMetadata(String str, String str2, Bitmap bitmap) {
+        cachedTitle=str; cachedArtist=str2; cachedArt=bitmap;
+        if (currentMode != 54 || Boolean.TRUE.equals(avOff)) return;
+        TextView textView = this.title;
+        if (str == null || str.trim().isEmpty()) {
+            str = "재생 정보 없음";
+        }
+        textView.setText(str);
+        TextView textView2 = this.artist;
+        if (str2 == null) {
+            str2 = "";
+        }
+        textView2.setText(str2);
+        showArtwork(bitmap);
+        notice.update(str,str2,Boolean.TRUE.equals(lightTheme),false);
+    }
+
+    public void setPlaying(Boolean bool) {
+        if (bool != null && currentMode != 54) return;
+        updatePlaying(bool);
+    }
+
+    private void updatePlaying(Boolean bool) {
+        int i;
+        this.playing = bool;
+        appSlot.setPlaying(bool);
+        invalidate();
+        TransportIcon transportIcon = this.play;
+        if (bool == null) {
+            i = 4;
+        } else {
+            i = bool.booleanValue() ? 2 : 1;
+        }
+        transportIcon.setIcon(i);
+    }
+
+    public void setProgress(Long l, Long l2) {
+        if (currentMode != 54 || Boolean.TRUE.equals(avOff)) return;
+        float f;
+        if (l == null || l2 == null || l.longValue() < 0 || l2.longValue() <= 0 || l.longValue() > l2.longValue()) {
+            f = -1.0f;
+        } else {
+            double dLongValue = l.longValue();
+            double dLongValue2 = l2.longValue();
+            Double.isNaN(dLongValue);
+            Double.isNaN(dLongValue2);
+            f = (float) (dLongValue / dLongValue2);
+        }
+        this.progress = f;
+        invalidate();
+    }
+
+    public void setProgressEnabled(boolean z) {
+        if (this.progressEnabled != z) {
+            this.progressEnabled = z;
+            invalidate();
+        }
+    }
+
+    @Override // android.view.ViewGroup, android.view.View
+    protected void dispatchDraw(Canvas canvas) {
+        super.dispatchDraw(canvas);
+        if (Boolean.FALSE.equals(playing) && !Boolean.TRUE.equals(avOff)
+                && artwork.getVisibility() == View.VISIBLE && artwork.getDrawable() != null
+                && currentMode != 2 && currentMode != 3 && currentMode != 4) {
+            float left = artwork.getLeft(), top = artwork.getTop();
+            float right = artwork.getRight(), bottom = artwork.getBottom();
+            float size = Math.min(right - left, bottom - top);
+            float cx = (left + right) / 2f, cy = (top + bottom) / 2f;
+            Paint overlay = this.progressPaint;
+            overlay.setStyle(Paint.Style.FILL);
+            overlay.setColor(0x59000000);
+            canvas.drawRect(left, top, right, bottom, overlay);
+            overlay.setColor(0xffffffff);
+            float barWidth = size * 0.065f, halfHeight = size * 0.13f, gap = size * 0.055f;
+            canvas.drawRoundRect(new android.graphics.RectF(cx - gap - barWidth, cy - halfHeight,
+                    cx - gap, cy + halfHeight), barWidth / 2, barWidth / 2, overlay);
+            canvas.drawRoundRect(new android.graphics.RectF(cx + gap, cy - halfHeight,
+                    cx + gap + barWidth, cy + halfHeight), barWidth / 2, barWidth / 2, overlay);
+        }
+        boolean slotVisible=appSlot.getVisibility()==View.VISIBLE;
+        float musicStart=slotVisible&&!appSlot.onRight()?appSlot.getRight():0f;
+        float musicEnd=slotVisible&&appSlot.onRight()?appSlot.getLeft():getWidth();
+        float progressStart=artwork.getRight(),progressEnd=musicEnd;
+        if(this.progressEnabled && this.progress >= 0.0f && progressEnd>progressStart){
+            this.progressPaint.setColor(Boolean.TRUE.equals(lightTheme)?0x663f484b:1728053247);
+            canvas.drawRect(progressStart,0,progressEnd,3,this.progressPaint);
+            this.progressPaint.setColor(Boolean.TRUE.equals(lightTheme)?-10887960:0xffffd99c);
+            canvas.drawRect(progressStart,0,progressStart+(progressEnd-progressStart)*this.progress,3,this.progressPaint);
+        }
+        if(touchFeedback){this.progressPaint.setColor(Boolean.TRUE.equals(lightTheme)?0x26293438:0x40ffffff);canvas.drawRect(musicStart,0,musicEnd,getHeight(),this.progressPaint);}
+    }
+
+    public void setControls(Controls controls) {
+        this.controls = controls;
+        boolean z = controls != null;
+        this.previous.setEnabled(z);
+        this.play.setEnabled(z);
+        this.next.setEnabled(z);
+        float f = z ? 1.0f : 0.4f;
+        this.previous.setAlpha(f);
+        this.play.setAlpha(f);
+        this.next.setAlpha(f);
+    }
+
+
+    @Override protected void onAttachedToWindow() {
+        super.onAttachedToWindow();
+        GuidanceProxy.listen(guideListener);
+        if (!registered) {
+            IntentFilter f = new IntentFilter();
+            f.addAction("com.hkmc.radio.widgetupdate");
+            f.addAction("com.hkmc.audio.usb.widgetupdate");
+            f.addAction("com.hkmc.dipoaudio.widgetupdate");
+            f.addAction("com.hkmc.gpmaudio.widgetupdate");
+            f.addAction("com.hkmc.genie_music.widgetupdate");
+            try { getContext().registerReceiver(mediaReceiver, f); registered = true; } catch (RuntimeException ignored) {}
+        }
+        if (!artReceiverRegistered) { try { IntentFilter filter=new IntentFilter("dev.ev6.ccnc_media.GENIE_ART");filter.addAction("dev.ev6.ccnc_media.RADIO_ART");getContext().registerReceiver(genieArtReceiver,filter,"android.permission.DUMP",null);artReceiverRegistered=true; } catch(RuntimeException ignored){} }
+        artExecutor = Executors.newSingleThreadExecutor();
+        currentMode = -999; mediaHandler.post(mediaPoll);
+    }
+    @Override protected void onDetachedFromWindow() {
+        GuidanceProxy.unlisten(guideListener);
+        notice.reset();
+        mediaHandler.removeCallbacks(openSettings);
+        mediaHandler.removeCallbacks(mediaPoll);
+        mediaHandler.removeCallbacks(projectionArtworkRefresh);
+        mediaHandler.removeCallbacks(clearTouchFeedback);touchFeedback=false;
+        if (registered) { try { getContext().unregisterReceiver(mediaReceiver); } catch (RuntimeException ignored) {} registered = false; }
+        if (artReceiverRegistered) { try { getContext().unregisterReceiver(genieArtReceiver); } catch (RuntimeException ignored) {} artReceiverRegistered=false; }
+        pendingGenieArt=null;pendingGenieTitle=null;pendingRadioArt=null;
+        artworkGeneration++;
+        if (artExecutor != null) { artExecutor.shutdownNow(); artExecutor = null; }
+        super.onDetachedFromWindow();
+    }
+    private void clearLive() {
+        notice.reset();
+        artworkGeneration++; pendingGenieArt=null; pendingGenieTitle=null; pendingRadioArt=null;liveRadioFrequency=Float.NaN;pendingRadioFrequency=Float.NaN;liveTitle = null; liveArtist = null; livePosition = -1; liveDuration = -1;
+        sourceBadge.setVisibility(currentMode == 115 && !Boolean.TRUE.equals(avOff) ? View.VISIBLE : View.GONE);
+        showArtwork(null); progress = -1f; invalidate();
+        if (Boolean.TRUE.equals(avOff)) showOff(); else if (currentMode != 54) { title.setText(currentMode == 115 ? "타이틀 정보 없음" : "재생 정보 없음"); artist.setText(currentMode == 115 ? "아티스트 정보 없음" : ""); }
+    }
+    private void requestStock() {
+        String pkg = currentMode == 2 || currentMode == 3 || currentMode == 4 ? "com.hkmc.av.app.radioge" : currentMode == 54 ? "com.daudio.av.app.btaudio.ui" : currentMode == 49 ? "com.daudio.av.app.usbmusic" : currentMode == 115 ? "com.daudio.app.dipo" : currentMode == 116 ? "com.google.android.projection.sink" : currentMode == 131 ? "com.daudio.app.musicstreaming" : null;
+        if (pkg == null) return;
+        try { Intent request = new Intent("com.hkmc.request.widgetupdate"); request.setPackage(pkg); getContext().sendBroadcast(request); } catch (RuntimeException ignored) {}
+    }
+    private boolean accepts(String action) {
+        return (currentMode == 2 || currentMode == 3 || currentMode == 4) && "com.hkmc.radio.widgetupdate".equals(action)
+            || currentMode == 49 && "com.hkmc.audio.usb.widgetupdate".equals(action)
+            || currentMode == 115 && "com.hkmc.dipoaudio.widgetupdate".equals(action)
+            || currentMode == 116 && "com.hkmc.gpmaudio.widgetupdate".equals(action)
+            || currentMode == 131 && "com.hkmc.genie_music.widgetupdate".equals(action);
+    }
+    private void receiveStock(Intent intent) {
+        if (intent == null || Boolean.TRUE.equals(avOff) || !accepts(intent.getAction())) return;
+        try {
+            if (currentMode == 2 || currentMode == 3 || currentMode == 4) {
+                if (intent.hasExtra("frq_total")) { float f = intent.getFloatExtra("frq_total", 0); if(Float.isNaN(liveRadioFrequency)||Math.abs(liveRadioFrequency-f)>0.01f){artworkGeneration++;artwork.setImageDrawable(null);}liveRadioFrequency=f; String band = intent.getStringExtra("radio_mode"); liveTitle = (band == null ? "FM" : band) + " " + String.format(Locale.US, "%.1f", f);applyRadioArtwork(); }
+                if (intent.hasExtra("broad_name")) liveArtist = intent.getStringExtra("broad_name");
+            } else {
+                if (intent.hasExtra("playstate")) {
+                    int state = intent.getIntExtra("playstate", -1);
+                    if (state == 1) updatePlaying(Boolean.TRUE);
+                    else if (state == 0 || (currentMode == 115 && state == 2)) updatePlaying(Boolean.FALSE);
+                }
+                if (intent.hasExtra("filename")) {
+                    String nextTitle = intent.getStringExtra("filename");
+                    if (nextTitle == null || !nextTitle.equals(liveTitle)) { liveArtist = null; artworkGeneration++; showArtwork(null); livePosition = -1; liveDuration = -1; mediaHandler.removeCallbacks(projectionArtworkRefresh); if (nextTitle != null && (currentMode == 115 || currentMode == 116)) mediaHandler.postDelayed(projectionArtworkRefresh, 800L); }
+                    liveTitle = nextTitle;
+                }
+                if (intent.hasExtra("artist_name")) liveArtist = intent.getStringExtra("artist_name");
+                if (intent.hasExtra("audio_current_time")) livePosition = number(intent, "audio_current_time");
+                if (intent.hasExtra("audio_total_time")) liveDuration = number(intent, "audio_total_time");
+                if (intent.hasExtra("artwork_raw_image")) {
+                    final byte[] bytes = intent.getByteArrayExtra("artwork_raw_image"); final long generation = ++artworkGeneration;
+                    if (bytes == null || bytes.length == 0 || bytes.length > 524288) showArtwork(null);
+                    else if (artExecutor != null) artExecutor.execute(new Runnable(){ public void run(){
+                        final BitmapFactory.Options bounds = new BitmapFactory.Options(); bounds.inJustDecodeBounds = true; BitmapFactory.decodeByteArray(bytes,0,bytes.length,bounds);
+                        if (bounds.outWidth <= 0 || bounds.outHeight <= 0 || bounds.outWidth > 4096 || bounds.outHeight > 4096) return;
+                        BitmapFactory.Options opts = new BitmapFactory.Options(); int sample=1; while (bounds.outWidth / sample > 512 || bounds.outHeight / sample > 512) sample *= 2; opts.inSampleSize=sample;
+                        final Bitmap bitmap = BitmapFactory.decodeByteArray(bytes,0,bytes.length,opts);
+                        mediaHandler.post(new Runnable(){ public void run(){if (registered && generation == artworkGeneration && bitmap != null) showArtwork(bitmap);}});
+                    }});
+                }
+            }
+            applyGenieArtwork();
+            title.setText(currentMode == 115 ? CarPlayBadge.title(liveTitle) :
+                    (liveTitle == null || liveTitle.trim().isEmpty() ? "재생 정보 없음" : liveTitle));
+            artist.setText(currentMode == 115 ? CarPlayBadge.artist(liveArtist) : (liveArtist == null ? "" : liveArtist));
+            notice.update(liveTitle,liveArtist,Boolean.TRUE.equals(lightTheme),currentMode == 115);
+            progress = liveDuration > 0 && livePosition >= 0 && livePosition <= liveDuration ? (float)((double)livePosition / liveDuration) : -1f; invalidate();
+        } catch (RuntimeException ignored) {}
+    }
+    private void applyGenieArtwork() {
+        Diagnostic.set("art_match", currentMode!=131 ? "other_mode" : pendingGenieArt==null ? "no_pending" : liveTitle==null ? "no_title" : !liveTitle.equals(pendingGenieTitle) ? "different_title" : artExecutor==null ? "no_executor" : "matched");
+        if(currentMode!=131 || pendingGenieArt==null || liveTitle==null || !liveTitle.equals(pendingGenieTitle) || artExecutor==null)return;
+        Diagnostic.set("art_processing", "matched");
+        final byte[] data=pendingGenieArt;pendingGenieArt=null;pendingGenieTitle=null;final long generation=++artworkGeneration;
+        artExecutor.execute(new Runnable(){public void run(){try { BitmapFactory.Options bounds=new BitmapFactory.Options();bounds.inJustDecodeBounds=true;BitmapFactory.decodeByteArray(data,0,data.length,bounds);if(bounds.outWidth<1||bounds.outHeight<1||bounds.outWidth>4096||bounds.outHeight>4096)return;BitmapFactory.Options opts=new BitmapFactory.Options();int sample=1;while(bounds.outWidth/sample>256||bounds.outHeight/sample>256)sample*=2;opts.inSampleSize=sample;final Bitmap bitmap=BitmapFactory.decodeByteArray(data,0,data.length,opts);mediaHandler.post(new Runnable(){public void run(){if(registered&&currentMode==131&&generation==artworkGeneration&&bitmap!=null)showArtwork(bitmap);}}); }catch(RuntimeException ignored){}catch(OutOfMemoryError ignored){}}});
+    }
+    private void applyRadioArtwork(){
+        if(!Float.isNaN(liveRadioFrequency)&&!Float.isNaN(pendingRadioFrequency)){float a=liveRadioFrequency,b=pendingRadioFrequency;Diagnostic.set("radio_scale",Math.abs(a-b)<0.01f?"same":Math.abs(a-b*10)<0.1f||Math.abs(b-a*10)<0.1f?"ten":Math.abs(a-b*100)<1||Math.abs(b-a*100)<1?"hundred":Math.abs(a-b*1000)<10||Math.abs(b-a*1000)<10?"thousand":"other");}
+        Diagnostic.set("radio_match",pendingRadioArt==null?"no_pending":Float.isNaN(liveRadioFrequency)?"no_frequency":!sameRadioFrequency(liveRadioFrequency,pendingRadioFrequency)?"different_frequency":"matched");
+        if((currentMode!=2&&currentMode!=3&&currentMode!=4)||pendingRadioArt==null||!sameRadioFrequency(liveRadioFrequency,pendingRadioFrequency)||artExecutor==null)return;
+        final byte[] data=pendingRadioArt;pendingRadioArt=null;final long generation=++artworkGeneration;
+        artExecutor.execute(new Runnable(){public void run(){try{BitmapFactory.Options b=new BitmapFactory.Options();b.inJustDecodeBounds=true;BitmapFactory.decodeByteArray(data,0,data.length,b);if(b.outWidth<1||b.outHeight<1||b.outWidth>4096||b.outHeight>4096)return;BitmapFactory.Options o=new BitmapFactory.Options();int sample=1;while(b.outWidth/sample>256||b.outHeight/sample>256)sample*=2;o.inSampleSize=sample;final Bitmap bitmap=BitmapFactory.decodeByteArray(data,0,data.length,o);mediaHandler.post(new Runnable(){public void run(){if(registered&&(currentMode==2||currentMode==3||currentMode==4)&&generation==artworkGeneration&&bitmap!=null){showArtwork(bitmap);Diagnostic.set("radio_display","applied");}}});}catch(RuntimeException ignored){}catch(OutOfMemoryError ignored){}}});
+    }
+    private static boolean sameRadioFrequency(float a,float b){
+        if(Float.isNaN(a)||Float.isNaN(b)||Float.isInfinite(a)||Float.isInfinite(b)||a<=0||b<=0)return false;
+        if(Math.abs(a-b)<=0.02f)return true;
+        return a>2000&&Math.abs(a/100f-b)<=0.02f||b>2000&&Math.abs(b/100f-a)<=0.02f;
+    }
+    private void toggleStockGuidance() {
+        if (!GuidanceProxy.active() || !(getContext() instanceof Activity)) return;
+        Activity a=(Activity)getContext(); View content=a.findViewById(android.R.id.content);
+        if (!a.hasWindowFocus() || content==null || content.getHeight()!=720 || (content.getWidth()!=1920 && content.getWidth()!=1280)) return;
+        int[] loc=new int[2]; getLocationOnScreen(loc); int right=loc[0]+getWidth()+4;
+        if (right!=1920 && right!=1280) return;
+        long t=android.os.SystemClock.uptimeMillis();
+        MotionEvent down=MotionEvent.obtain(t,t,MotionEvent.ACTION_DOWN,right-70,675,0);
+        MotionEvent up=MotionEvent.obtain(t,t+60,MotionEvent.ACTION_UP,right-70,675,0);
+        try { a.onTouchEvent(down); a.onTouchEvent(up); } finally {down.recycle();up.recycle();}
+    }
+    private static long number(Intent intent, String key) { Object v=intent.getExtras().get(key); return v instanceof Number ? ((Number)v).longValue() : -1; }
+
+    @Override protected void onVisibilityChanged(View changedView,int visibility){super.onVisibilityChanged(changedView,visibility);if(notice!=null&&visibility==View.VISIBLE&&isShown())notice.ownerShown();}
+
+    @Override public boolean onTouchEvent(MotionEvent event) {
+        switch (event.getActionMasked()) {
+        case MotionEvent.ACTION_DOWN:
+            mediaHandler.removeCallbacks(clearTouchFeedback);mediaHandler.removeCallbacks(openSettings);touchFeedback=true;invalidate();pointer = event.getPointerId(0); downX = event.getX(); downY = event.getY(); downTime = event.getEventTime(); moved = false;longPressed=false;mediaHandler.postDelayed(openSettings,ViewConfiguration.getLongPressTimeout()); return true;
+        case MotionEvent.ACTION_MOVE:
+            if (Math.abs(event.getX() - downX) > ViewConfiguration.get(getContext()).getScaledTouchSlop() || Math.abs(event.getY() - downY) > ViewConfiguration.get(getContext()).getScaledTouchSlop()) { moved = true;mediaHandler.removeCallbacks(openSettings);touchFeedback=false;invalidate(); }
+            return true;
+        case MotionEvent.ACTION_POINTER_DOWN: pointer = -1;mediaHandler.removeCallbacks(openSettings);touchFeedback=false;invalidate(); return true;
+        case MotionEvent.ACTION_CANCEL: pointer = -1;mediaHandler.removeCallbacks(openSettings);touchFeedback=false;invalidate(); return true;
+        case MotionEvent.ACTION_UP:
+            mediaHandler.removeCallbacks(openSettings);
+            if (!longPressed && pointer == event.getPointerId(0)) {
+                float dx = event.getX() - downX, dy = event.getY() - downY;
+                float threshold = Math.max(dp(48), ViewConfiguration.get(getContext()).getScaledTouchSlop() * 2);
+                if (Math.abs(dx) >= threshold && Math.abs(dx) > Math.abs(dy) * 1.5f && controls != null) {
+                    if (dx < 0) controls.next(); else controls.previous();
+                } else if (!moved && Math.abs(dx) <= ViewConfiguration.get(getContext()).getScaledTouchSlop() && Math.abs(dy) <= ViewConfiguration.get(getContext()).getScaledTouchSlop() && event.getEventTime() - downTime <= 350L && controls != null) {
+                    controls.playPause();
+                }
+            }
+            pointer = -1;if(touchFeedback)mediaHandler.postDelayed(clearTouchFeedback,120); return true;
+        default: return true;
+        }
+    }
+
+    private int dp(int i) {
+        return (int) ((getResources().getDisplayMetrics().density * i) + 0.5f);
+    }
+}
