@@ -1,6 +1,6 @@
 # 분할화면 커스텀 1.0.0
 
-순정 오른쪽 분할화면을 열면 선택한 외부 앱의 위젯을 표시합니다. 앱에서 기능을 켜고 설치된 위젯을 선택할 수 있습니다. 외부 앱 연동 방법은 [애드온 개발 안내](addon-sdk.md)를 참고하세요.
+순정 오른쪽 분할화면을 열면 선택한 외부 앱의 위젯을 표시합니다. 앱에서 기능을 켜고 설치된 위젯을 선택할 수 있습니다. 외부 앱 연동 방법은 [위젯 SDK 및 개발 안내](../widget-sdk/README.md)를 참고하세요.
 
 - [NEMESIS USB 설치 ZIP](custom-split-main-1.0.0-nemesis.zip)
 - [NEMESIS 패키지 ZIP](custom-split-main-1.0.0-nemesis-package.zip)

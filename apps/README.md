@@ -4,5 +4,6 @@
 
 - [분할화면 커스텀 다운로드 및 안내](custom-split/README.md)
 - [택시미터기 다운로드 및 안내](taximeter/README.md)
+- [분할화면 커스텀 위젯 SDK](widget-sdk/README.md)
 
 HMG-API 1.0.2 이상과 NEMESIS 환경이 필요합니다. 차량 설치는 포함된 NEMESIS USB ZIP 또는 패키지 ZIP을 사용하세요. 앱 서명과 HMG-API 작성자 서명은 기존 차량 설치본과 동일합니다. 서명 비밀키는 저장소에 포함하지 않습니다.
